@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project artifacts (stored on Kaggle / Hugging Face Hub)
+data/
+models/
+artifacts/
+*.tif
+*.tiff
+*.npz
+*.parquet
+*.pt
+*.pth
+*.onnx
