@@ -44,7 +44,8 @@ tcc/
 ## 4. Data flow
 
 ```bash
-GEE Sentinel-2 L2A (B2/B3/B4/B8)
+IBGE vector mesh (Região Geográfica Imediata 310027) → AOI polygon
+GEE Sentinel-2 L2A (B2/B3/B4/B8) filtered by AOI
   → cloud-free mosaic (QA60)                       [01]
   → reference masks (MapBiomas / AlphaEarth)       [02]
   → mask comparison + finalization                 [03, 04]
@@ -64,29 +65,29 @@ GEE Sentinel-2 L2A (B2/B3/B4/B8)
 
 Each notebook is an isolated stage with a single responsibility and declared inputs/outputs. Execution order is numeric.
 
-| #    | Notebook                                | Phase            | Input → Output                                      |
-| ---- | --------------------------------------- | ---------------- | --------------------------------------------------- |
-| `00` | `setup_environment.ipynb`               | 0. Setup         | — → env ready, config loaded, GEE authenticated     |
-| `01` | `gee_sentinel2_acquisition.ipynb`       | 1. Acquisition   | AOI (IBGE 310027) → Sentinel-2 L2A GeoTIFF mosaics  |
-| `02` | `gee_reference_masks.ipynb`             | 1. Acquisition   | MapBiomas/AlphaEarth → rasterized 10 m binary masks |
-| `03` | `mask_sources_comparison.ipynb`         | 2. Ground Truth  | candidate masks → comparative diagnostic            |
-| `04` | `mask_finalization.ipynb`               | 2. Ground Truth  | chosen protocol → final binary masks                |
-| `05` | `preprocessing.ipynb`                   | 3. Preprocessing | mosaics → cloud-free normalized composites          |
-| `06` | `patch_generation.ipynb`                | 3. Dataset       | composites+masks → 512x512 patches + manifest       |
-| `07` | `spatial_kfold_split.ipynb`             | 3. Dataset       | manifest → manifest with `fold`                     |
-| `08` | `dataset_eda.ipynb`                     | 3. Dataset       | manifest → normalization stats + sanity checks      |
-| `09` | `train_unet.ipynb`                      | 4. Training      | dataset → U-Net weights + per-fold metrics          |
-| `10` | `train_segformer.ipynb`                 | 4. Training      | dataset → SegFormer weights + per-fold metrics      |
-| `11` | `evaluation.ipynb`                      | 5. Evaluation    | predictions → pixel-level IoU/F1/P/R                |
-| `12` | `comparative_analysis.ipynb`            | 5. Evaluation    | metrics → statistical comparison + error maps       |
-| `13` | `xai_gradcam_unet.ipynb`                | 6. XAI           | U-Net → Grad-CAM heatmaps                           |
-| `14` | `xai_attention_rollout_segformer.ipynb` | 6. XAI           | SegFormer → Attention Rollout maps                  |
-| `15` | `results_synthesis.ipynb`               | 7. Synthesis     | all → figures/tables for monografia                 |
-| `16` | `export_release.ipynb`                  | 7. Dissemination | patches+weights → HF Hub dataset + models           |
+| #    | Notebook                                | Phase            | Input → Output                                                    |
+| ---- | --------------------------------------- | ---------------- | ----------------------------------------------------------------- |
+| `00` | `setup_environment.ipynb`               | 0. Setup         | — → env ready, config loaded, GEE authenticated                   |
+| `01` | `gee_sentinel2_acquisition.ipynb`       | 1. Acquisition   | IBGE mesh (310027) → AOI polygon → Sentinel-2 L2A GeoTIFF mosaics |
+| `02` | `gee_reference_masks.ipynb`             | 1. Acquisition   | MapBiomas/AlphaEarth → rasterized 10 m binary masks               |
+| `03` | `mask_sources_comparison.ipynb`         | 2. Ground Truth  | candidate masks → comparative diagnostic                          |
+| `04` | `mask_finalization.ipynb`               | 2. Ground Truth  | chosen protocol → final binary masks                              |
+| `05` | `preprocessing.ipynb`                   | 3. Preprocessing | mosaics → cloud-free normalized composites                        |
+| `06` | `patch_generation.ipynb`                | 3. Dataset       | composites+masks → 512x512 patches + manifest                     |
+| `07` | `spatial_kfold_split.ipynb`             | 3. Dataset       | manifest → manifest with `fold`                                   |
+| `08` | `dataset_eda.ipynb`                     | 3. Dataset       | manifest → normalization stats + sanity checks                    |
+| `09` | `train_unet.ipynb`                      | 4. Training      | dataset → U-Net weights + per-fold metrics                        |
+| `10` | `train_segformer.ipynb`                 | 4. Training      | dataset → SegFormer weights + per-fold metrics                    |
+| `11` | `evaluation.ipynb`                      | 5. Evaluation    | predictions → pixel-level IoU/F1/P/R                              |
+| `12` | `comparative_analysis.ipynb`            | 5. Evaluation    | metrics → statistical comparison + error maps                     |
+| `13` | `xai_gradcam_unet.ipynb`                | 6. XAI           | U-Net → Grad-CAM heatmaps                                         |
+| `14` | `xai_attention_rollout_segformer.ipynb` | 6. XAI           | SegFormer → Attention Rollout maps                                |
+| `15` | `results_synthesis.ipynb`               | 7. Synthesis     | all → figures/tables for monografia                               |
+| `16` | `export_release.ipynb`                  | 7. Dissemination | patches+weights → HF Hub dataset + models                         |
 
 ## 6. Config & artifacts schema
 
-- **`config.yaml`**: `region`, `dates`, `bands`, `patch_size`, `fold_count`, `seed`, `coffee_min_ratio`, `model_variants`, loss weights, `lr`, `epochs`, `batch_size`.
+- **`config.yaml`**: `aoi` (IBGE region code `310027` + vector-mesh source), `dates`, `bands`, `patch_size`, `fold_count`, `seed`, `coffee_min_ratio`, `model_variants`, loss weights, `lr`, `epochs`, `batch_size`.
 - **`manifest.parquet` columns**: `patch_id`, `tile_id`, `fold`, `row`, `col`, `bbox`, `coffee_ratio`, `mask_source`, `image_path`, `mask_path`.
 - **Artifacts**: `artifacts/metrics/{model}/fold_{i}.json`, `artifacts/figures/`, `models/{model}/fold_{i}.pt`.
 
@@ -100,7 +101,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 ### Phase 1 — Acquisition
 
-- [ ] `01_gee_sentinel2_acquisition.ipynb`
+- [ ] `01_gee_sentinel2_acquisition.ipynb` — IBGE mesh import (AOI polygon) + Sentinel-2 acquisition
 - [ ] `02_gee_reference_masks.ipynb`
 
 ### Phase 2 — Ground Truth
