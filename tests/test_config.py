@@ -63,7 +63,7 @@ def test_read_yaml_rejects_missing_file(tmp_path: Path) -> None:
 def test_read_yaml_rejects_non_mapping(tmp_path: Path) -> None:
     target = tmp_path / "config.yaml"
     target.write_text("- a\n- b\n", encoding="utf-8")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="esperado mapeamento"):
         _read_yaml(target)
 
 

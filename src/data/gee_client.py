@@ -31,14 +31,13 @@ class GEECredentialsError(RuntimeError):
 
 def _write_key_from_json(key_json: str) -> Path:
     """Materializa a chave JSON embutida em um arquivo temporário."""
-    handle = tempfile.NamedTemporaryFile(
+    with tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".json",
         prefix="gee-key-",
         delete=False,
         encoding="utf-8",
-    )
-    with handle:
+    ) as handle:
         handle.write(key_json)
     return Path(handle.name)
 

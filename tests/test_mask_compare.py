@@ -9,8 +9,8 @@ from src.data.mask_compare import (
     binary_confusion,
     cluster_prevalence,
     coffee_ratio,
-    compare_sources,
     cohen_kappa_from_confusion,
+    compare_sources,
     f1_from_confusion,
     iou_from_confusion,
     mask_candidate_filename,
@@ -32,7 +32,7 @@ def test_binary_confusion_counts() -> None:
 
 
 def test_binary_confusion_rejects_shape_mismatch() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Formas incompatíveis"):
         binary_confusion(np.zeros((2, 2)), np.zeros((3, 3)))
 
 
@@ -62,7 +62,7 @@ def test_compare_sources_returns_metrics_table() -> None:
 
 
 def test_compare_sources_requires_reference() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Referência ausente"):
         compare_sources({"cand": np.zeros((2, 2))}, reference_name="ref")
 
 

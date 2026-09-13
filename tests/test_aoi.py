@@ -73,7 +73,8 @@ def test_geometry_bounds_returns_floats() -> None:
 
 def test_geometry_to_ee_uses_geo_interface() -> None:
     class _Geometry:
-        __geo_interface__ = {"type": "Point", "coordinates": (0.0, 0.0)}
+        def __init__(self) -> None:
+            self.__geo_interface__ = {"type": "Point", "coordinates": (0.0, 0.0)}
 
     class _EE:
         def __init__(self) -> None:
