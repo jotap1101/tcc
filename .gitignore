@@ -150,6 +150,11 @@ activemq-data/
 # Environments
 .env
 .envrc
+
+# GEE service account private keys
+*.service-account*.json
+*service_account*.json
+articulate-case-*.json
 .venv
 env/
 venv/
