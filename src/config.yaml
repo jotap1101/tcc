@@ -77,6 +77,18 @@ masks:
   alphaearth_clusters: 8
   # Número de amostras de pixels para treinar o clusterizador.
   alphaearth_samples: 5000
+  # Fontes candidatas comparadas na fase 2 (ordem de exibição dos diagnósticos).
+  candidates:
+    - "mapbiomas_coffee"
+    - "alphaearth_clusters"
+  # Fonte eleita como verdade de campo (definida ao fim da fase 2).
+  selected_source: null
+  # Diretório local com os GeoTIFF exportados (baixados do Google Drive).
+  local_dir: data/raw/masks
+  # Diretório local das máscaras finais alinhadas ao grid da composição.
+  final_dir: data/processed/masks
+  # Limiar de prevalência por cluster usado para binarizar o k-means.
+  cluster_threshold: 0.5
 
 # Construção do conjunto de dados e validação espacial.
 dataset:

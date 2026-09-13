@@ -26,7 +26,7 @@ tcc/
 ├── pyproject.toml / uv.lock       # uv + ruff + mypy + pytest
 ├── src/                            # shared package (reusable logic)
 │   ├── config.py + config.yaml
-│   ├── data/{dataset,augmentations,manifest,mask_utils,gee_client,aoi}.py
+│   ├── data/{dataset,augmentations,manifest,mask_utils,mask_compare,raster_io,gee_client,aoi}.py
 │   ├── losses.py
 │   ├── metrics.py
 │   ├── trainer.py
@@ -107,8 +107,8 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 ### Phase 2 — Ground Truth
 
-- [ ] `03_mask_sources_comparison.ipynb`
-- [ ] `04_mask_finalization.ipynb`
+- [x] `03_mask_sources_comparison.ipynb`
+- [x] `04_mask_finalization.ipynb`
 
 ### Phase 3 — Preprocessing & Dataset
 
@@ -141,7 +141,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 - [x] `config.py` + `config.yaml`
 - [ ] `data/dataset.py`, `data/augmentations.py`, `data/manifest.py`
-- [ ] `data/aoi.py`, `data/mask_utils.py`, `data/gee_client.py`
+- [x] `data/aoi.py`, `data/mask_utils.py`, `data/mask_compare.py`, `data/raster_io.py`, `data/gee_client.py`
 - [ ] `losses.py` (Dice + Focal + Boundary)
 - [ ] `metrics.py` (IoU, F1, Precision, Recall)
 - [ ] `trainer.py`
