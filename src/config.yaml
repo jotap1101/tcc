@@ -53,8 +53,10 @@ gee:
   # UTM zona 23S, adequada para Minas Gerais.
   crs: "EPSG:31983"
   max_pixels: 10000000000000
-  # Pasta no Google Drive usada pelas exportações (fase de aquisição).
-  export_folder: "tcc_coffee_gee"
+  # Pasta raiz no Google Drive usada pelas exportações (fase de aquisição).
+  export_folder: "tcc"
+  # Subpasta do Drive para os mosaicos Sentinel-2 exportados.
+  composite_subfolder: "sentinel2"
   # Prefixo dos arquivos exportados no Drive.
   export_prefix: "guaxupe"
 
@@ -83,6 +85,8 @@ masks:
     - "alphaearth_clusters"
   # Fonte eleita como verdade de campo (definida ao fim da fase 2).
   selected_source: null
+  # Subpasta do Drive para as máscaras exportadas (dentro de gee.export_folder).
+  export_subfolder: "masks"
   # Diretório local com os GeoTIFF exportados (baixados do Google Drive).
   local_dir: data/raw/masks
   # Diretório local das máscaras finais alinhadas ao grid da composição.

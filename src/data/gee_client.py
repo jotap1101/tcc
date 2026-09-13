@@ -221,16 +221,21 @@ def export_image_to_drive(
     description: str,
     region: Any,
     folder: str | None = None,
+    subfolder: str | None = None,
     file_name_prefix: str | None = None,
     scale: int | None = None,
     crs: str | None = None,
     max_pixels: float | None = None,
 ) -> Any:
     """Dispara uma tarefa de exportação de imagem para o Google Drive."""
+    # Pasta raiz configurada, opcionalmente complementada por uma subpasta.
+    drive_folder = str(folder or CONFIG.get("gee.export_folder", "tcc"))
+    if subfolder:
+        drive_folder = f"{drive_folder}/{subfolder}"
     task = ee.batch.Export.image.toDrive(
         image=image,
         description=description,
-        folder=str(folder or CONFIG.get("gee.export_folder", "tcc_coffee_gee")),
+        folder=drive_folder,
         fileNamePrefix=str(
             file_name_prefix or CONFIG.get("gee.export_prefix", "guaxupe")
         ),
