@@ -30,9 +30,9 @@ Research project (deep learning / computer vision) on **semantic segmentation of
 
 ### Code Architecture
 
-- Development uses a **hybrid layout**: each stage is an **isolated Jupyter Notebook (`.ipynb`)** acting as an orchestration/visualization layer that imports reusable logic from the shared **`src/tcc/`** package (pure Python).
+- Development uses a **hybrid layout**: each stage is an **isolated Jupyter Notebook (`.ipynb`)** acting as an orchestration/visualization layer that imports reusable logic from the shared **`src/`** package (pure Python).
 - `ruff`, `mypy` and `pytest` target **`src/`** and **`tests/`** only — never notebooks. Notebooks are not linted, typed or unit-tested directly.
-- Notebooks run in numeric order and must resolve every input path from `src/tcc/config.py` (no hardcoded paths).
+- Notebooks run in numeric order and must resolve every input path from `src/config.py` (no hardcoded paths).
 
 ### Modularity
 
@@ -64,7 +64,7 @@ Research project (deep learning / computer vision) on **semantic segmentation of
 
 ### Reproducibility
 
-- Single source of truth for configuration: `src/tcc/config.yaml` (loaded by `config.py`).
+- Single source of truth for configuration: `src/config.yaml` (loaded by `config.py`).
 - Fix all seeds (`python`/`numpy`/`torch`/`cuda`); commit `uv.lock`; log the full environment per run.
 - Data is registered in a versioned `manifest.parquet`; heavy artifacts live outside git (`data/`, `models/`, `artifacts/`).
 

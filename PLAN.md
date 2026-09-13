@@ -10,8 +10,8 @@ Guide the sequential, modular implementation of the full pipeline — from Googl
 
 ## 2. Architecture decisions (MLOps)
 
-- **Hybrid layout**: thin Jupyter notebooks (`.ipynb`) act as orchestration/visualization layers; all reusable logic lives in the shared **`src/tcc/`** package (pure Python), which is the only target of `ruff`, `mypy` and `pytest`.
-- **Single source of truth**: `src/tcc/config.yaml` (loaded by `config.py`) centralizes paths, bands, patch size, hyperparameters and seeds. No hardcoded paths in notebooks.
+- **Hybrid layout**: thin Jupyter notebooks (`.ipynb`) act as orchestration/visualization layers; all reusable logic lives in the shared **`src/`** package (pure Python), which is the only target of `ruff`, `mypy` and `pytest`.
+- **Single source of truth**: `src/config.yaml` (loaded by `config.py`) centralizes paths, bands, patch size, hyperparameters and seeds. No hardcoded paths in notebooks.
 - **Manifest-driven data**: `manifest.parquet` registers every patch (`patch_id`, `tile_id`, `fold`, bbox, `coffee_ratio`, `mask_source`, paths). It is the backbone of reproducibility.
 - **Identical training protocol** across models: same split, loss, optimizer, scheduler, metrics and seed — only the architecture differs. This guarantees a scientifically fair comparison.
 - **CI (GitHub Actions)** runs `ruff` + `mypy` + `pytest` on push; heavy GPU training runs on Kaggle.
@@ -24,7 +24,7 @@ tcc/
 ├── AGENTS.md                      # source of truth (rules)
 ├── PLAN.md                        # this roadmap
 ├── pyproject.toml / uv.lock       # uv + ruff + mypy + pytest
-├── src/tcc/                       # shared package (reusable logic)
+├── src/                            # shared package (reusable logic)
 │   ├── config.py + config.yaml
 │   ├── data/{dataset,augmentations,manifest,mask_utils,gee_client}.py
 │   ├── losses.py
@@ -136,7 +136,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 - [ ] `15_results_synthesis.ipynb`
 - [ ] `16_export_release.ipynb`
 
-### Shared package (`src/tcc/`) — built alongside the phases
+### Shared package (`src/`) — built alongside the phases
 
 - [ ] `config.py` + `config.yaml`
 - [ ] `data/dataset.py`, `data/augmentations.py`, `data/manifest.py`
@@ -154,7 +154,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 - [ ] Seeds fixed (`python`/`numpy`/`torch`/`cuda`)
 - [ ] `uv.lock` committed; environment dump logged per run
 - [ ] Deterministic, non-overlapping patch generation
-- [ ] Every notebook resolves input paths from `src/tcc/config.py`
+- [ ] Every notebook resolves input paths from `src/config.py`
 - [ ] Identical split/loss/optimizer/metrics across both models
 
 ## 9. Risks & open decisions

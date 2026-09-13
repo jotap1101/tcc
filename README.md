@@ -43,7 +43,7 @@ tcc/
 ├── AGENTS.md              # fonte de verdade para regras de código e formatação
 ├── PLAN.md                # roteiro de implementação
 ├── pyproject.toml         # uv, ruff, mypy, pytest
-├── src/tcc/               # pacote Python compartilhado (lógica reutilizável)
+├── src/                     # pacote Python compartilhado (lógica reutilizável)
 ├── tests/                 # pytest apenas sobre src/
 ├── notebooks/             # estágios .ipynb sequenciais
 ├── data/                  # dados espectrais e máscaras (ignorado pelo git)
@@ -59,7 +59,7 @@ tcc/
 
 ## Execução
 
-O projeto segue um layout híbrido: os notebooks Jupyter orquestram cada estágio, enquanto a lógica reutilizável reside no pacote `src/tcc/`. Os notebooks devem ser executados em ordem numérica e resolver todos os caminhos de entrada a partir de `src/tcc/config.py`.
+O projeto segue um layout híbrido: os notebooks Jupyter orquestram cada estágio, enquanto a lógica reutilizável reside no pacote `src/`. Os notebooks devem ser executados em ordem numérica e resolver todos os caminhos de entrada a partir de `src/config.py`.
 
 O treinamento e o armazenamento de artefatos ocorrem no Kaggle; linting, verificação de tipos e testes rodam no CI (GitHub Actions). Consulte o `AGENTS.md` para as regras operacionais completas.
 
