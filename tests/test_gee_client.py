@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from src.data import gee_client
 
 
@@ -59,3 +58,10 @@ def test_resolve_key_path_prefers_existing_file(
     key.write_text("{}", encoding="utf-8")
     monkeypatch.setenv(gee_client.KEY_PATH_ENV, str(key))
     assert gee_client._resolve_key_path() == key
+
+
+def test_make_export_description_is_deterministic() -> None:
+    description = gee_client.make_export_description(
+        "guaxupe", "310044", "2023-06-01", "2023-09-30"
+    )
+    assert description == "guaxupe_310044_20230601_20230930"

@@ -26,7 +26,7 @@ tcc/
 ├── pyproject.toml / uv.lock       # uv + ruff + mypy + pytest
 ├── src/                            # shared package (reusable logic)
 │   ├── config.py + config.yaml
-│   ├── data/{dataset,augmentations,manifest,mask_utils,gee_client}.py
+│   ├── data/{dataset,augmentations,manifest,mask_utils,gee_client,aoi}.py
 │   ├── losses.py
 │   ├── metrics.py
 │   ├── trainer.py
@@ -44,9 +44,9 @@ tcc/
 ## 4. Data flow
 
 ```bash
-IBGE vector mesh (Região Geográfica Imediata 310027) → AOI polygon
+IBGE vector mesh (Região Geográfica Imediata 310044) → AOI polygon
 GEE Sentinel-2 L2A (B2/B3/B4/B8) filtered by AOI
-  → cloud-free mosaic (QA60)                       [01]
+  → cloud-free mosaic (Cloud Score+ / QA60)        [01]
   → reference masks (MapBiomas / AlphaEarth)       [02]
   → mask comparison + finalization                 [03, 04]
   → normalized aligned composites                  [05]
@@ -68,7 +68,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 | #    | Notebook                                | Phase            | Input → Output                                                    |
 | ---- | --------------------------------------- | ---------------- | ----------------------------------------------------------------- |
 | `00` | `setup_environment.ipynb`               | 0. Setup         | — → env ready, config loaded, GEE authenticated                   |
-| `01` | `gee_sentinel2_acquisition.ipynb`       | 1. Acquisition   | IBGE mesh (310027) → AOI polygon → Sentinel-2 L2A GeoTIFF mosaics |
+| `01` | `gee_sentinel2_acquisition.ipynb`       | 1. Acquisition   | IBGE mesh (310044) → AOI polygon → Sentinel-2 L2A GeoTIFF mosaics |
 | `02` | `gee_reference_masks.ipynb`             | 1. Acquisition   | MapBiomas/AlphaEarth → rasterized 10 m binary masks               |
 | `03` | `mask_sources_comparison.ipynb`         | 2. Ground Truth  | candidate masks → comparative diagnostic                          |
 | `04` | `mask_finalization.ipynb`               | 2. Ground Truth  | chosen protocol → final binary masks                              |
@@ -87,7 +87,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 ## 6. Config & artifacts schema
 
-- **`config.yaml`**: `aoi` (IBGE region code `310027` + vector-mesh source), `dates`, `bands`, `patch_size`, `fold_count`, `seed`, `coffee_min_ratio`, `model_variants`, loss weights, `lr`, `epochs`, `batch_size`.
+- **`config.yaml`**: `aoi` (IBGE region code `310044` + vector-mesh source), `dates`, `bands`, `patch_size`, `fold_count`, `seed`, `coffee_min_ratio`, `model_variants`, loss weights, `lr`, `epochs`, `batch_size`.
 - **`manifest.parquet` columns**: `patch_id`, `tile_id`, `fold`, `row`, `col`, `bbox`, `coffee_ratio`, `mask_source`, `image_path`, `mask_path`.
 - **Artifacts**: `artifacts/metrics/{model}/fold_{i}.json`, `artifacts/figures/`, `models/{model}/fold_{i}.pt`.
 
@@ -102,8 +102,8 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 ### Phase 1 — Acquisition
 
-- [ ] `01_gee_sentinel2_acquisition.ipynb` — IBGE mesh import (AOI polygon) + Sentinel-2 acquisition
-- [ ] `02_gee_reference_masks.ipynb`
+- [x] `01_gee_sentinel2_acquisition.ipynb` — IBGE mesh import (AOI polygon) + Sentinel-2 acquisition
+- [x] `02_gee_reference_masks.ipynb`
 
 ### Phase 2 — Ground Truth
 
@@ -141,7 +141,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 - [x] `config.py` + `config.yaml`
 - [ ] `data/dataset.py`, `data/augmentations.py`, `data/manifest.py`
-- [ ] `data/mask_utils.py`, `data/gee_client.py`
+- [ ] `data/aoi.py`, `data/mask_utils.py`, `data/gee_client.py`
 - [ ] `losses.py` (Dice + Focal + Boundary)
 - [ ] `metrics.py` (IoU, F1, Precision, Recall)
 - [ ] `trainer.py`

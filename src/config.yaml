@@ -22,17 +22,28 @@ paths:
   # Manifesto versionado que registra cada patch do conjunto de dados.
   manifest: data/processed/manifest.parquet
 
-# Área de estudo: Região Geográfica Imediata de Guaxupé - MG (código IBGE 310027).
+# Área de estudo: Região Geográfica Imediata de Guaxupé - MG (código IBGE 310044).
 aoi:
-  region_code: "310027"
+  region_code: "310044"
   region_name: "Região Geográfica Imediata de Guaxupé"
   state: "MG"
+  # Coluna da malha vetorial do IBGE que identifica a região imediata.
+  region_code_column: "CD_RGI"
   mesh_path: data/external/MG_RG_Imediatas_2025/MG_RG_Imediatas_2025.shp
 
 # Aquisição no Google Earth Engine (Sentinel-2 Nível-2A).
 gee:
   image_collection: "COPERNICUS/S2_SR_HARMONIZED"
   cloud_collection: "COPERNICUS/S2_CLOUD_PROBABILITY"
+  # Coleção Cloud Score+ (pontuação contínua de céu claro, 10 m).
+  cloud_score_plus_collection: "GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"
+  # Banda e limiar de máscara de nuvem (0 = não claro, 1 = claro).
+  cloud_score_band: "cs_cdf"
+  cloud_score_threshold: 0.60
+  # Banda de QA nativa usada como fallback quando Cloud Score+ não cobre a cena.
+  qa_band: "QA60"
+  # Estatística de composição temporal das cenas livres de nuvem.
+  composite: "median"
   # Janela sazonal provisória (estação seca), refinada na fase de aquisição.
   start_date: "2023-06-01"
   end_date: "2023-09-30"
@@ -42,6 +53,30 @@ gee:
   # UTM zona 23S, adequada para Minas Gerais.
   crs: "EPSG:31983"
   max_pixels: 10000000000000
+  # Pasta no Google Drive usada pelas exportações (fase de aquisição).
+  export_folder: "tcc_coffee_gee"
+  # Prefixo dos arquivos exportados no Drive.
+  export_prefix: "guaxupe"
+
+# Máscaras de referência (verdade de campo) para a classe café.
+masks:
+  # Ano de referência das máscaras.
+  year: 2023
+  # Classe de café na legenda MapBiomas.
+  coffee_class: 46
+  # Asset MapBiomas 10 m (Coleção 3, Sentinel-2).
+  mapbiomas_10m_asset: "projects/mapbiomas-public/assets/brazil/lulc_10m/collection3/mapbiomas_10m_collection3_integration_v1"
+  # Asset MapBiomas 30 m (Coleção 10.1).
+  mapbiomas_30m_asset: "projects/mapbiomas-public/assets/brazil/lulc/collection10_1/mapbiomas_brazil_collection10_1_coverage_v1"
+  # Nome da banda de classificação no asset MapBiomas.
+  mapbiomas_band: "classification"
+  # Coleção de embeddings anuais (AlphaEarth / Satellite Embedding), 64 bandas.
+  alphaearth_collection: "GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL"
+  alphaearth_year: 2023
+  # Número de clusters do k-means usado como máscara candidata.
+  alphaearth_clusters: 8
+  # Número de amostras de pixels para treinar o clusterizador.
+  alphaearth_samples: 5000
 
 # Construção do conjunto de dados e validação espacial.
 dataset:
