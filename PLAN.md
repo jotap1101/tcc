@@ -95,9 +95,10 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 ### Phase 0 — Setup
 
-- [ ] `00_setup_environment.ipynb` — platform detection, dependency install, GEE auth, seeds, config load
-- [ ] `pyproject.toml` + `uv.lock` (uv, ruff, mypy, pytest)
-- [ ] `.github/workflows/ci.yml` (ruff + mypy + pytest)
+- [x] `00_setup_environment.ipynb` — platform detection, dependency install, GEE auth, seeds, config load
+- [x] `pyproject.toml` (uv, ruff, mypy, pytest)
+- [ ] `uv.lock` gerado e commitado (`uv lock`)
+- [x] `.github/workflows/ci.yml` (ruff + mypy + pytest)
 
 ### Phase 1 — Acquisition
 
@@ -138,7 +139,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 ### Shared package (`src/`) — built alongside the phases
 
-- [ ] `config.py` + `config.yaml`
+- [x] `config.py` + `config.yaml`
 - [ ] `data/dataset.py`, `data/augmentations.py`, `data/manifest.py`
 - [ ] `data/mask_utils.py`, `data/gee_client.py`
 - [ ] `losses.py` (Dice + Focal + Boundary)

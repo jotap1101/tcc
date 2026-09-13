@@ -1,0 +1,91 @@
+# ==============================================================================
+# Fonte única de verdade da configuração do projeto.
+# Carregado exclusivamente por src/config.py; nenhum caminho deve ser
+# codificado diretamente em notebooks ou no restante do pacote.
+# ==============================================================================
+
+project:
+  name: tcc-coffee-segmentation
+  version: "0.1.0"
+  # Semente global fixa para python/numpy/torch/cuda (reprodutibilidade).
+  seed: 42
+
+# Diretórios resolvidos a partir da raiz do repositório (ou de TCC_ROOT).
+paths:
+  data: data
+  raw: data/raw
+  interim: data/interim
+  processed: data/processed
+  external: data/external
+  models: models
+  artifacts: artifacts
+  # Manifesto versionado que registra cada patch do conjunto de dados.
+  manifest: data/processed/manifest.parquet
+
+# Área de estudo: Região Geográfica Imediata de Guaxupé - MG (código IBGE 310027).
+aoi:
+  region_code: "310027"
+  region_name: "Região Geográfica Imediata de Guaxupé"
+  state: "MG"
+  mesh_path: data/external/MG_RG_Imediatas_2025/MG_RG_Imediatas_2025.shp
+
+# Aquisição no Google Earth Engine (Sentinel-2 Nível-2A).
+gee:
+  image_collection: "COPERNICUS/S2_SR_HARMONIZED"
+  cloud_collection: "COPERNICUS/S2_CLOUD_PROBABILITY"
+  # Janela sazonal provisória (estação seca), refinada na fase de aquisição.
+  start_date: "2023-06-01"
+  end_date: "2023-09-30"
+  bands: ["B2", "B3", "B4", "B8"]
+  cloud_filter_pct: 20
+  scale_m: 10
+  # UTM zona 23S, adequada para Minas Gerais.
+  crs: "EPSG:31983"
+  max_pixels: 10000000000000
+
+# Construção do conjunto de dados e validação espacial.
+dataset:
+  patch_size: 512
+  fold_count: 5
+  # Proporção mínima de pixels de café para um patch ser considerado válido.
+  coffee_min_ratio: 0.01
+  normalization:
+    strategy: "zscore"
+
+# Protocolo de treinamento idêntico para ambas as arquiteturas.
+training:
+  batch_size: 8
+  epochs: 60
+  lr: 0.0001
+  weight_decay: 0.0001
+  num_workers: 2
+  amp: true
+  early_stopping_patience: 10
+  # Perda multivariada: Dice + Focal + Boundary.
+  loss:
+    dice_weight: 1.0
+    focal_weight: 1.0
+    boundary_weight: 1.0
+    focal_gamma: 2.0
+    focal_alpha: 0.25
+
+# Variantes arquiteturais comparadas (apenas a arquitetura difere).
+models:
+  unet:
+    encoder_name: "resnet34"
+    encoder_weights: "imagenet"
+    in_channels: 4
+    num_classes: 1
+  segformer:
+    pretrained_model_name: "nvidia/mit-b0"
+    in_channels: 4
+    num_labels: 1
+    image_size: 512
+    ignore_mismatched_sizes: true
+
+# Métricas em nível de pixel avaliadas na fase de avaliação.
+evaluation:
+  metrics: ["iou", "f1", "precision", "recall"]
+
+logging:
+  level: "INFO"
