@@ -1,8 +1,10 @@
 """Inicialização do Google Earth Engine e utilitários de aquisição.
 
-Nenhuma credencial é lida de arquivos versionados, impressa em logs ou
-persistida: os valores vêm exclusivamente de variáveis de ambiente, conforme
-``.env.example``. Este módulo é reutilizado pelos notebooks das fases 0 e 1.
+Suporta dois modos de autenticação via variáveis de ambiente: conta de serviço
+ou credenciais OAuth de usuário. Nenhuma credencial é lida de arquivos
+versionados, impressa em logs ou persistida: os valores vêm exclusivamente de
+variáveis de ambiente, conforme ``.env.example``. Este módulo é reutilizado
+pelos notebooks das fases 0 a 4.
 """
 
 from __future__ import annotations
@@ -14,15 +16,20 @@ from typing import Any
 
 from src.config import CONFIG
 
-# Variáveis obrigatórias para a autenticação por conta de serviço.
-REQUIRED_ENV_VARS: tuple[str, ...] = (
-    "GEE_SERVICE_ACCOUNT_EMAIL",
-    "GEE_PROJECT",
-)
+# Variáveis obrigatórias comuns aos dois modos de autenticação.
+REQUIRED_ENV_VARS: tuple[str, ...] = ("GEE_PROJECT",)
 
-# Formatos aceitos para a chave privada (um dos dois é obrigatório).
+# Formatos aceitos para a chave privada da conta de serviço (um é obrigatório).
 KEY_PATH_ENV = "GEE_SERVICE_ACCOUNT_KEY_PATH"
 KEY_JSON_ENV = "GEE_SERVICE_ACCOUNT_KEY_JSON"
+
+# Credenciais OAuth de usuário: caminho do arquivo ou conteúdo JSON embutido.
+OAUTH_CREDENTIALS_PATH_ENV = "GEE_OAUTH_CREDENTIALS_PATH"
+OAUTH_CREDENTIALS_JSON_ENV = "GEE_OAUTH_CREDENTIALS_JSON"
+
+# Arquivo padrão de credenciais do Earth Engine (formato da CLI oficial).
+EE_CREDENTIALS_DIR = Path.home() / ".config" / "earthengine"
+EE_CREDENTIALS_FILE = EE_CREDENTIALS_DIR / "credentials"
 
 
 class GEECredentialsError(RuntimeError):
@@ -62,8 +69,35 @@ def _resolve_key_path() -> Path:
     )
 
 
+def _materialize_oauth_credentials() -> Path:
+    """Grava as credenciais OAuth no arquivo padrão do Earth Engine."""
+    source = os.environ.get(OAUTH_CREDENTIALS_PATH_ENV)
+    if source:
+        src = Path(source).expanduser()
+        if not src.is_file():
+            raise GEECredentialsError(
+                f"{OAUTH_CREDENTIALS_PATH_ENV} aponta para arquivo inexistente: {src}"
+            )
+        content = src.read_text(encoding="utf-8")
+    else:
+        content = os.environ.get(OAUTH_CREDENTIALS_JSON_ENV)
+        if not content:
+            raise GEECredentialsError(
+                f"Defina {OAUTH_CREDENTIALS_PATH_ENV} ou {OAUTH_CREDENTIALS_JSON_ENV} "
+                "com as credenciais OAuth do usuário."
+            )
+    EE_CREDENTIALS_DIR.mkdir(parents=True, exist_ok=True)
+    EE_CREDENTIALS_FILE.write_text(content, encoding="utf-8")
+    return EE_CREDENTIALS_FILE
+
+
 def init_ee() -> Any:
-    """Inicializa o Earth Engine com a conta de serviço e retorna o módulo ``ee``."""
+    """Inicializa o Earth Engine e retorna o módulo ``ee``.
+
+    O modo de autenticação é definido pelo ambiente: se ``GEE_SERVICE_ACCOUNT_EMAIL``
+    estiver presente, usa a conta de serviço; caso contrário, se houver credenciais
+    OAuth, materializa-as no arquivo padrão do Earth Engine e autentica como usuário.
+    """
     missing = [name for name in REQUIRED_ENV_VARS if not os.environ.get(name)]
     if missing:
         raise GEECredentialsError(
@@ -72,11 +106,25 @@ def init_ee() -> Any:
 
     import ee  # importação tardia: não exige a dependência no CI
 
-    email = os.environ["GEE_SERVICE_ACCOUNT_EMAIL"]
     project = os.environ["GEE_PROJECT"]
-    key_path = _resolve_key_path()
+    if os.environ.get("GEE_SERVICE_ACCOUNT_EMAIL"):
+        # Conta de serviço: chave privada resolvida exclusivamente do ambiente.
+        credentials = ee.ServiceAccountCredentials(
+            os.environ["GEE_SERVICE_ACCOUNT_EMAIL"], str(_resolve_key_path())
+        )
+    elif os.environ.get(OAUTH_CREDENTIALS_PATH_ENV) or os.environ.get(
+        OAUTH_CREDENTIALS_JSON_ENV
+    ):
+        # Credenciais OAuth de usuário: gravadas no arquivo padrão do Earth Engine.
+        _materialize_oauth_credentials()
+        credentials = None
+    else:
+        raise GEECredentialsError(
+            "Defina credenciais de conta de serviço (GEE_SERVICE_ACCOUNT_EMAIL + "
+            f"{KEY_PATH_ENV}/{KEY_JSON_ENV}) ou de usuário "
+            f"({OAUTH_CREDENTIALS_PATH_ENV}/{OAUTH_CREDENTIALS_JSON_ENV})."
+        )
 
-    credentials = ee.ServiceAccountCredentials(email, str(key_path))
     ee.Initialize(credentials, project=project)
     return ee
 
