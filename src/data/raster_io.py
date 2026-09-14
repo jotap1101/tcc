@@ -17,7 +17,7 @@ def read_band(path: str | Path, band: int = 1) -> np.ndarray:
     import rasterio  # importação tardia: requer o extra ``geo``
 
     with rasterio.open(path) as source:
-        return source.read(band)
+        return np.asarray(source.read(band))
 
 
 def write_single_band(

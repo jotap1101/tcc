@@ -7,7 +7,7 @@ auxiliares para binarizar o mapa de clusters do k-means.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -48,7 +48,7 @@ def binary_confusion(reference: Any, candidate: Any) -> dict[str, int]:
     }
 
 
-def _denominator(c: dict[str, int], positives: int, negatives: int) -> int:
+def _denominator(c: dict[str, int], positives: str, negatives: str) -> int:
     return c[positives] + c[negatives]
 
 
@@ -113,10 +113,10 @@ def compare_sources(arrays: dict[str, Any], reference_name: str) -> pd.DataFrame
         if name == reference_name:
             continue
         confusion = binary_confusion(reference, candidate)
-        row = {"source": name}
+        row: dict[str, Any] = {"source": name}
         row.update(metrics_from_confusion(confusion))
         rows.append(row)
-    return pd.DataFrame(rows, columns=["source", *METRIC_COLUMNS])
+    return cast("pd.DataFrame", pd.DataFrame(rows, columns=["source", *METRIC_COLUMNS]))
 
 
 def cluster_prevalence(clusters: Any, reference: Any) -> dict[int, float]:

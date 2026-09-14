@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 import pytest
@@ -19,11 +20,14 @@ from src.data.aoi import (
 
 def _frame() -> pd.DataFrame:
     """DataFrame mínimo que imita o DBF da malha do IBGE."""
-    return pd.DataFrame(
-        {
-            "CD_RGI": ["310044", "310027"],
-            "NM_RGI": ["Guaxupé", "Juiz de Fora"],
-        }
+    return cast(
+        "pd.DataFrame",
+        pd.DataFrame(
+            {
+                "CD_RGI": ["310044", "310027"],
+                "NM_RGI": ["Guaxupé", "Juiz de Fora"],
+            }
+        ),
     )
 
 
@@ -78,7 +82,7 @@ def test_geometry_to_ee_uses_geo_interface() -> None:
 
     class _EE:
         def __init__(self) -> None:
-            self.received: dict | None = None
+            self.received: dict[str, object] | None = None
 
         def Geometry(self, payload: dict) -> dict:  # noqa: N802
             self.received = payload

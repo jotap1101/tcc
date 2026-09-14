@@ -18,7 +18,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -110,7 +110,7 @@ class Config:
     @property
     def raw(self) -> dict[str, Any]:
         """Cópia defensiva do mapeamento bruto da configuração."""
-        return json.loads(json.dumps(self._raw))
+        return cast("dict[str, Any]", json.loads(json.dumps(self._raw)))
 
     @property
     def seed(self) -> int:
