@@ -84,7 +84,7 @@ def test_geometry_to_ee_uses_geo_interface() -> None:
         def __init__(self) -> None:
             self.received: dict[str, object] | None = None
 
-        def Geometry(self, payload: dict) -> dict:  # noqa: N802
+        def Geometry(self, payload: dict[str, object]) -> dict[str, object]:  # noqa: N802
             self.received = payload
             return payload
 
