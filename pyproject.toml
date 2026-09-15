@@ -3,7 +3,7 @@ name = "tcc"
 version = "0.1.0"
 description = "Segmentação semântica de cafezais: U-Net (CNN) vs SegFormer (ViT) em imagens Sentinel-2."
 readme = "README.md"
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10,<3.14"
 license = { text = "MIT" }
 keywords = [
   "semantic-segmentation",
