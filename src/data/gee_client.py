@@ -1,27 +1,21 @@
 """Inicialização do Google Earth Engine e utilitários de aquisição.
 
-Suporta dois modos de autenticação via variáveis de ambiente: conta de serviço
-ou credenciais OAuth de usuário. Nenhuma credencial é lida de arquivos
-versionados, impressa em logs ou persistida: os valores vêm exclusivamente de
-variáveis de ambiente, conforme ``.env.example``. Este módulo é reutilizado
-pelos notebooks das fases 0 a 4.
+Autentica exclusivamente por credenciais OAuth de usuário via variáveis de
+ambiente. Nenhuma credencial é lida de arquivos versionados, impressa em logs
+ou persistida: os valores vêm exclusivamente do ambiente, conforme
+``.env.example``. Este módulo é reutilizado pelos notebooks das fases 0 a 4.
 """
 
 from __future__ import annotations
 
 import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from src.config import CONFIG
 
-# Variáveis obrigatórias comuns aos dois modos de autenticação.
+# Variáveis obrigatórias para a autenticação OAuth.
 REQUIRED_ENV_VARS: tuple[str, ...] = ("GEE_PROJECT",)
-
-# Formatos aceitos para a chave privada da conta de serviço (um é obrigatório).
-KEY_PATH_ENV = "GEE_SERVICE_ACCOUNT_KEY_PATH"
-KEY_JSON_ENV = "GEE_SERVICE_ACCOUNT_KEY_JSON"
 
 # Credenciais OAuth de usuário: caminho do arquivo ou conteúdo JSON embutido.
 OAUTH_CREDENTIALS_PATH_ENV = "GEE_OAUTH_CREDENTIALS_PATH"
@@ -34,39 +28,6 @@ EE_CREDENTIALS_FILE = EE_CREDENTIALS_DIR / "credentials"
 
 class GEECredentialsError(RuntimeError):
     """Erro de configuração das credenciais do Earth Engine."""
-
-
-def _write_key_from_json(key_json: str) -> Path:
-    """Materializa a chave JSON embutida em um arquivo temporário."""
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        suffix=".json",
-        prefix="gee-key-",
-        delete=False,
-        encoding="utf-8",
-    ) as handle:
-        handle.write(key_json)
-    return Path(handle.name)
-
-
-def _resolve_key_path() -> Path:
-    """Resolve o caminho da chave privada a partir do ambiente."""
-    key_path = os.environ.get(KEY_PATH_ENV)
-    if key_path:
-        path = Path(key_path).expanduser()
-        if not path.is_file():
-            raise GEECredentialsError(
-                f"{KEY_PATH_ENV} aponta para arquivo inexistente: {path}"
-            )
-        return path
-
-    key_json = os.environ.get(KEY_JSON_ENV)
-    if key_json:
-        return _write_key_from_json(key_json)
-
-    raise GEECredentialsError(
-        f"Defina {KEY_PATH_ENV} ou {KEY_JSON_ENV} com a chave da conta de serviço."
-    )
 
 
 def _materialize_oauth_credentials() -> Path:
@@ -94,9 +55,8 @@ def _materialize_oauth_credentials() -> Path:
 def init_ee() -> Any:
     """Inicializa o Earth Engine e retorna o módulo ``ee``.
 
-    O modo de autenticação é definido pelo ambiente: se ``GEE_SERVICE_ACCOUNT_EMAIL``
-    estiver presente, usa a conta de serviço; caso contrário, se houver credenciais
-    OAuth, materializa-as no arquivo padrão do Earth Engine e autentica como usuário.
+    As credenciais OAuth (caminho do arquivo ou conteúdo JSON) são materializadas
+    no arquivo padrão do Earth Engine e a autenticação ocorre como usuário.
     """
     missing = [name for name in REQUIRED_ENV_VARS if not os.environ.get(name)]
     if missing:
@@ -107,25 +67,16 @@ def init_ee() -> Any:
     import ee  # importação tardia: não exige a dependência no CI
 
     project = os.environ["GEE_PROJECT"]
-    if os.environ.get("GEE_SERVICE_ACCOUNT_EMAIL"):
-        # Conta de serviço: chave privada resolvida exclusivamente do ambiente.
-        credentials = ee.ServiceAccountCredentials(
-            os.environ["GEE_SERVICE_ACCOUNT_EMAIL"], str(_resolve_key_path())
-        )
-    elif os.environ.get(OAUTH_CREDENTIALS_PATH_ENV) or os.environ.get(
+    if not os.environ.get(OAUTH_CREDENTIALS_PATH_ENV) and not os.environ.get(
         OAUTH_CREDENTIALS_JSON_ENV
     ):
-        # Credenciais OAuth de usuário: gravadas no arquivo padrão do Earth Engine.
-        _materialize_oauth_credentials()
-        credentials = None
-    else:
         raise GEECredentialsError(
-            "Defina credenciais de conta de serviço (GEE_SERVICE_ACCOUNT_EMAIL + "
-            f"{KEY_PATH_ENV}/{KEY_JSON_ENV}) ou de usuário "
-            f"({OAUTH_CREDENTIALS_PATH_ENV}/{OAUTH_CREDENTIALS_JSON_ENV})."
+            f"Defina {OAUTH_CREDENTIALS_PATH_ENV} ou {OAUTH_CREDENTIALS_JSON_ENV} "
+            "com as credenciais OAuth do usuário."
         )
-
-    ee.Initialize(credentials, project=project)
+    # Credenciais OAuth de usuário: gravadas no arquivo padrão do Earth Engine.
+    _materialize_oauth_credentials()
+    ee.Initialize(credentials=None, project=project)
     return ee
 
 

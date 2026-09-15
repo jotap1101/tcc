@@ -162,5 +162,5 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 - **Ground-truth source** is the main risk (MapBiomas vs AlphaEarth vs S2DR3/S2DR4) — handled in Phase 2 before any training.
 - **CRS/georeferencing** of labels vs the Sentinel grid (UTM zone for MG).
-- **GEE authentication** on Kaggle (service account) — validated in notebook `00`.
+- **GEE authentication** on Kaggle/Colab (OAuth de usuário, gerado via `ee.Authenticate()`) — validated in notebook `00`.
 - **MiT variant** (b0–b2) balanced against T4/P100 VRAM.

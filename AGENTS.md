@@ -76,7 +76,7 @@ Research project (deep learning / computer vision) on **semantic segmentation of
 
 ### Secrets & Authentication
 
-- Credentials (GEE service account, Hugging Face token, Kaggle secrets) are read from environment variables only and are **never committed**.
+- Credentials (GEE OAuth credentials, Hugging Face token, Kaggle secrets) are read from environment variables only and are **never committed**.
 
 ### State of the art
 
