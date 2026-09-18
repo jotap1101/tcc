@@ -1,4 +1,5 @@
 """Testes de src/utils.py (sementes fixas e flags determinísticas)."""
+
 from src.utils import set_all_seeds, set_deterministic_flags
 
 

@@ -1,4 +1,5 @@
 """Configuração única do projeto, carregada de src/config.yaml (fonte de verdade)."""
+
 from __future__ import annotations
 
 import functools

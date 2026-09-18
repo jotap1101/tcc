@@ -8,6 +8,7 @@ em um Secret do Kaggle (GDRIVE_TOKEN). Nunca commitar o token.
 Uso:
     python scripts/generate_drive_token.py --client-secret caminho/do/client_secret.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -29,9 +30,7 @@ def main() -> None:
 
     from google_auth_oauthlib.flow import InstalledAppFlow
 
-    flow = InstalledAppFlow.from_client_secrets_file(
-        str(args.client_secret), scopes=[DRIVE_SCOPE]
-    )
+    flow = InstalledAppFlow.from_client_secrets_file(str(args.client_secret), scopes=[DRIVE_SCOPE])
     creds = flow.run_local_server()
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)

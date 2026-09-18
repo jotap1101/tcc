@@ -5,6 +5,7 @@ repositório público, extrai `src/`, `data/external/` e `requirements-runtime.t
 para o workspace e adiciona o workspace ao `sys.path`. Sem dependências externas,
 o que resolve o ciclo "precisa de src para baixar src".
 """
+
 from __future__ import annotations
 
 import os

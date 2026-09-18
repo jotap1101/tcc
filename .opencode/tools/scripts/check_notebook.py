@@ -1,4 +1,5 @@
 """Valida convenções estruturais de notebooks do projeto (somente stdlib)."""
+
 import json
 import re
 import sys

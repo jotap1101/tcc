@@ -1,4 +1,5 @@
 """Testes de src/config.py (carregamento e validação da configuração única)."""
+
 from src.config import get_config
 
 

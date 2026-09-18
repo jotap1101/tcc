@@ -4,6 +4,7 @@ Contrato único usado pelos notebooks: detect_platform(), mount_drive(),
 ensure_storage_root() e resolve_storage_paths(). A diferença entre Colab
 (montagem nativa) e Kaggle (Drive API + cache local) fica isolada aqui.
 """
+
 from __future__ import annotations
 
 import json
@@ -122,9 +123,7 @@ class DriveClient:
         service = self._build_service()
         name = remote_path.split("/")[-1]
         res = (
-            service.files()
-            .list(q=f"name='{name}' and trashed=false", fields="files(id)")
-            .execute()
+            service.files().list(q=f"name='{name}' and trashed=false", fields="files(id)").execute()
         )
         files = res.get("files", [])
         if not files:

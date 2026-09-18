@@ -1,4 +1,5 @@
 """Utilidades de reprodutibilidade e autenticação."""
+
 from __future__ import annotations
 
 import os

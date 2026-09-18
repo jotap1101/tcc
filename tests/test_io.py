@@ -1,4 +1,5 @@
 """Testes de src/io.py (abstração de plataforma e de armazenamento tcc/)."""
+
 from src import io
 from src.config import get_config
 

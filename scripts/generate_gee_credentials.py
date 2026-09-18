@@ -9,6 +9,7 @@ em um Secret do Kaggle (GEE_CREDENTIALS). Nunca commitar o token.
 Uso:
     python scripts/generate_gee_credentials.py
 """
+
 from __future__ import annotations
 
 import argparse
