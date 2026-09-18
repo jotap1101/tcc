@@ -122,7 +122,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 - [x] `src/io.py` (platform detection, Drive mount, `tcc/` root ensure/resolve, `src/` delivery) + unit tests
 - [x] `pyproject.toml` (uv, ruff, mypy, pytest)
 - [x] `requirements-runtime.txt` (versões pinadas instaladas pelo notebook 00)
-- [ ] `uv.lock` (gerado via `uv lock` no primeiro sync)
+- [x] `uv.lock` (gerado via `uv lock`)
 - [x] `.github/workflows/ci.yml` (ruff + mypy + pytest + validação de notebooks)
 
 ### Phase 1 — Acquisition
