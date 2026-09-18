@@ -25,7 +25,6 @@ def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
     return config
 
 
-@functools.lru_cache(maxsize=1)
 def get_config() -> dict[str, Any]:
-    """Retorna a configuração cacheada (uma única carga por processo)."""
+    """Carrega a configuração (sem cache, para refletir atualizações do arquivo)."""
     return load_config()
