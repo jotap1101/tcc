@@ -164,6 +164,7 @@ venv.bak/
 *service_account*.json
 *serviceaccount*.json
 *credentials*.json
+*client_secret*.json
 /credentials/
 articulate-case-508513-m4-f0f3c3599df0.json
 
