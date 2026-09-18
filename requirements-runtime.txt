@@ -1,0 +1,19 @@
+# Versões pinadas instaladas pelo notebook 00 em TODAS as plataformas (Colab e Kaggle).
+# Os ambientes padrão do Colab e do Kaggle diferem; o pin garante o MESMO protocolo
+# de execução nas duas. Validar/atualizar este arquivo no primeiro run do notebook 00.
+torch==2.5.1
+torchvision==0.20.1
+transformers==4.47.1
+earthengine-api==0.1.393
+huggingface-hub==0.27.0
+numpy==1.26.4
+pandas==2.2.3
+pyarrow==17.0.0
+scipy==1.14.1
+scikit-learn==1.5.2
+matplotlib==3.9.4
+seaborn==0.13.2
+rasterio==1.4.0
+pyyaml==6.0.2
+google-api-python-client==2.151.0
+google-auth-oauthlib==1.2.1

@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    name: Quality (ruff + mypy + pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies (when pyproject.toml exists)
+        if: hashFiles('pyproject.toml') != ''
+        run: uv sync --locked
+      - name: Ruff lint (src/tests)
+        if: hashFiles('pyproject.toml') != ''
+        run: uv run ruff check src tests
+      - name: Ruff format check (src/tests)
+        if: hashFiles('pyproject.toml') != ''
+        run: uv run ruff format --check src tests
+      - name: Mypy (src/tests)
+        if: hashFiles('pyproject.toml') != ''
+        run: uv run mypy src tests
+      - name: Pytest (src/tests)
+        if: hashFiles('pyproject.toml') != ''
+        run: uv run pytest tests
+
+  notebook-conventions:
+    name: Notebook conventions (structure + clean outputs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate notebooks (naming, markdown-above-code, non-empty cells, no committed outputs)
+        run: python .opencode/tools/scripts/check_notebook.py

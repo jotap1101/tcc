@@ -157,6 +157,16 @@ ENV/
 env.bak/
 venv.bak/
 
+# Credenciais e segredos — nunca versionar
+*.pem
+*.key
+*service-account*.json
+*service_account*.json
+*serviceaccount*.json
+*credentials*.json
+/credentials/
+articulate-case-508513-m4-f0f3c3599df0.json
+
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -217,8 +227,12 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Project artifacts (stored on Kaggle / Hugging Face Hub)
-data/
+# Project artifacts (stored on the Drive tcc/ root)
+# data/raw, data/interim e data/processed: dados gerados — espelho do Drive, nunca versionar.
+# data/external/: dados externos de referência (ex.: malha IBGE) — VERSIONADOS.
+data/*
+!data/external/
+!data/external/**
 models/
 artifacts/
 *.tif
