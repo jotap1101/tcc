@@ -10,16 +10,14 @@ import json
 import os
 import shutil
 import sys
-import tarfile
-import urllib.request
 from pathlib import Path
 from typing import Any
 
+from src import bootstrap
 from src.config import get_config
 
 COLAB_DRIVE_ROOT = Path("/content/drive/MyDrive")
 KAGGLE_DRIVE_CACHE = Path("/kaggle/working/drive")
-REPO_URL = "https://github.com/jotap1101/tcc"
 
 
 def detect_platform() -> str:
@@ -226,52 +224,12 @@ def _copy_mirror_to_workspace(workspace: Path) -> None:
         shutil.copytree(external, workspace / "data" / "external")
 
 
-def _seed_repo_mirror(workspace: Path) -> None:
-    """Grava src/ e data/external/ no espelho MyDrive/tcc/repo (cria no Drive)."""
-    config = get_config()
-    root_name = config["storage"]["drive_root"]
-    if detect_platform() == "kaggle":
-        client = get_drive_client()
-        client.upload_tree(workspace / "src", f"{root_name}/repo/src")
-        if (workspace / "data" / "external").is_dir():
-            client.upload_tree(
-                workspace / "data" / "external", f"{root_name}/repo/data/external"
-            )
-    else:
-        mirror = _mirror_repo_root()
-        shutil.copytree(workspace / "src", mirror / "src")
-        external = workspace / "data" / "external"
-        if external.is_dir():
-            shutil.copytree(external, mirror / "data" / "external")
-
-
-def _bootstrap_from_repo(workspace: Path) -> None:
-    """Baixa o repositório público e obtém src/ + data/external/ sem espelho.
-
-    Usa o tarball do GitHub (stdlib: urllib + tarfile); sem necessidade de git.
-    """
-    archive = workspace / "_repo_bootstrap.tar.gz"
-    extract_dir = workspace / "_repo_bootstrap"
-    try:
-        urllib.request.urlretrieve(f"{REPO_URL}/archive/refs/heads/main.tar.gz", archive)
-        with tarfile.open(archive, "r:gz") as tf:
-            tf.extractall(extract_dir)
-        shutil.move(extract_dir / "tcc-main" / "src", workspace / "src")
-        external = extract_dir / "tcc-main" / "data" / "external"
-        if external.is_dir():
-            shutil.move(external, workspace / "data" / "external")
-        _seed_repo_mirror(workspace)
-    finally:
-        archive.unlink(missing_ok=True)
-        shutil.rmtree(extract_dir, ignore_errors=True)
-
-
 def sync_repo_to_workspace(workspace: Path) -> Path:
     """Entrega o código (src/) e os dados externos (data/external/) ao runtime.
 
     Se o espelho MyDrive/tcc/repo existir, copia dele; se não existir (primeiro
-    run), baixa o repositório público e CRIA o espelho no Drive — os próprios
-    notebooks geram a estrutura dentro de tcc/. O workspace entra no sys.path.
+    run), usa src/bootstrap (stdlib) que baixa o repositório público e cria o
+    espelho no Drive — os próprios notebooks geram a estrutura dentro de tcc/.
     """
     for rel in ("src", "data"):
         path = workspace / rel
@@ -280,7 +238,7 @@ def sync_repo_to_workspace(workspace: Path) -> Path:
     if _mirror_available():
         _copy_mirror_to_workspace(workspace)
     else:
-        _bootstrap_from_repo(workspace)
+        bootstrap.bootstrap_workspace(workspace)
     if str(workspace) not in sys.path:
         sys.path.insert(0, str(workspace))
     return workspace / "src"
