@@ -71,6 +71,7 @@ MyDrive/tcc/                       # raiz de armazenamento (criada/acessada pelo
 - Conta no Google Earth Engine (autenticação OAuth com a conta principal via `ee.Authenticate()`).
 - Google Drive com a pasta `tcc/` na raiz — se já existir é reutilizada; se não existir, os notebooks a criam automaticamente.
 - Ambiente de execução com GPU (Google Colab ou Kaggle).
+- Apenas para Kaggle: tokens OAuth do Drive e do Earth Engine, gerados uma vez pelos scripts em `scripts/` e armazenados como Secrets (env vars) — nunca versionados (veja `secrets/README.md`).
 
 ## Execução
 
