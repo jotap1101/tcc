@@ -23,16 +23,19 @@ DRIVE_ROOT = DRIVE_MOUNT_POINT / "MyDrive"
 
 
 def detect_platform() -> str:
-    """Identifica a plataforma de execução: 'colab', 'kaggle' ou 'local'."""
+    """Identifica a plataforma de execução: 'colab', 'kaggle' ou 'local'.
+
+    A variável do Kaggle é verificada ANTES do google.colab, pois o pacote
+    google-colab também está instalado em kernels do Kaggle.
+    """
+    if os.getenv("KAGGLE_KERNEL_RUN_TYPE"):
+        return "kaggle"
     try:
         import google.colab  # noqa: F401
 
         return "colab"
     except Exception:
-        pass
-    if os.getenv("KAGGLE_KERNEL_RUN_TYPE"):
-        return "kaggle"
-    return "local"
+        return "local"
 
 
 def workspace_root() -> pathlib.Path:
