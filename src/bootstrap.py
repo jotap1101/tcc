@@ -75,18 +75,23 @@ def _download_and_extract(workspace: pathlib.Path) -> None:
 
 
 def _seed_drive_mirror(workspace: pathlib.Path) -> None:
-    """Cria o espelho MyDrive/tcc/repo no Colab/local (no Kaggle é via API depois)."""
+    """Cria/atualiza o espelho MyDrive/tcc/repo (idempotente) no Colab/local."""
     if detect_platform() == "kaggle":
         return
     from google.colab import drive  # noqa: PLC0415
 
-    drive.mount(str(DRIVE_MOUNT_POINT))
+    if not DRIVE_ROOT.exists():
+        drive.mount(str(DRIVE_MOUNT_POINT))
     mirror = DRIVE_ROOT / "tcc" / "repo"
-    if (workspace / "src").is_dir():
-        shutil.copytree(workspace / "src", mirror / "src")
-    external = workspace / "data" / "external"
-    if external.is_dir():
-        shutil.copytree(external, mirror / "data" / "external")
+
+    def _refresh(source: pathlib.Path, target: pathlib.Path) -> None:
+        if target.exists():
+            shutil.rmtree(target)
+        if source.exists():
+            shutil.copytree(source, target)
+
+    _refresh(workspace / "src", mirror / "src")
+    _refresh(workspace / "data" / "external", mirror / "data" / "external")
 
 
 def bootstrap_workspace(workspace: pathlib.Path | None = None) -> pathlib.Path:
