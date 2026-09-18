@@ -1,0 +1,63 @@
+# Fonte única de verdade de configuração do projeto (carregada por src/config.py).
+project:
+  name: "tcc"
+
+aoi:
+  region_code: "310044"  # Região Geográfica Imediata de Guaxupé (IBGE)
+  vector_source: "ibge_mesh"  # malha vetorial do IBGE (versão 2025, MG)
+  mesh_path: "data/external/ibge/mg_rg_immediatas_2025/mg_rg_immediatas_2025.shp"  # versionada no repo
+
+data:
+  collection: "COPERNICUS/S2_SR_HARMONIZED"
+  bands: ["B2", "B3", "B4", "B8"]
+  dates:
+    start: "2023-01-01"
+    end: "2023-12-31"
+  cloud_threshold: 20  # porcentagem máxima de nuvens (QA60)
+  patch_size: 512
+  coffee_min_ratio: 0.0
+
+ground_truth:
+  # Cada fonte é integrada em uma célula de código própria e armazenada em uma
+  # subpasta própria sob MyDrive/tcc/data/{raw,interim}/<fonte>.
+  sources:
+    mapbiomas:
+      enabled: true
+    alphaearth:
+      enabled: true
+    s2dr:
+      enabled: false
+
+storage:
+  drive_root: "tcc"  # pasta canônica na raiz do Google Drive (MyDrive/<drive_root>)
+  subfolders:
+    data_raw: "data/raw"
+    data_interim: "data/interim"
+    data_processed: "data/processed"
+    data_external: "data/external"
+    models: "models"
+    artifacts_metrics: "artifacts/metrics"
+    artifacts_figures: "artifacts/figures"
+    artifacts_runs: "artifacts/runs"
+    secrets: "secrets"
+    repo: "repo"  # espelho do código-fonte (src/) usado como entrega ao runtime
+
+splits:
+  fold_count: 5
+
+loss:
+  dice_weight: 1.0
+  focal_weight: 1.0
+  boundary_weight: 1.0
+
+model:
+  unet_channels: [32, 64, 128, 256]
+  segformer_variant: "nvidia/mit-b1"
+
+training:
+  lr: 1.0e-4
+  epochs: 100
+  batch_size: 16
+
+reproducibility:
+  seed: 42
