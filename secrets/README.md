@@ -14,6 +14,7 @@ tokens, obtidos uma única vez com a **conta principal**:
 | `GDRIVE_TOKEN`      | Acesso ao `MyDrive/tcc/` via Drive API    | `scripts/generate_drive_token.py`            | Secret do Kaggle (env var) |
 | `GDRIVE_TOKEN_FILE` | Alternativa: caminho de um arquivo token  | idem (envie o arquivo como dataset)          | arquivo no Kaggle          |
 | `GEE_CREDENTIALS`   | Autenticação headless do Earth Engine     | `scripts/generate_gee_credentials.py`        | Secret do Kaggle (env var) |
+| `GEE_PROJECT`       | Projeto Cloud do GEE (`ee.Initialize`)    | ID visto no Earth Engine Code Editor         | Secret do Kaggle (env var) |
 
 ## Como usar
 

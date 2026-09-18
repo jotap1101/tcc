@@ -28,19 +28,28 @@ def set_deterministic_flags() -> None:
 def authenticate_gee() -> None:
     """Autentica e inicializa o Earth Engine com a conta principal.
 
-    Se a variável de ambiente GEE_CREDENTIALS estiver definida (ex.: Secret no
-    Kaggle), escreve a credencial em ~/.config/earthengine/credentials e
-    inicializa de forma headless; caso contrário, executa o fluxo interativo
-    ee.Authenticate() (padrão do Colab).
+    O projeto Cloud do GEE vem de GEE_PROJECT (env) ou de config.yaml
+    (gee.project). Se GEE_CREDENTIALS estiver definida (Secret no Kaggle),
+    escreve a credencial em ~/.config/earthengine/credentials e inicializa de
+    forma headless; caso contrário, executa o fluxo interativo ee.Authenticate().
     """
     import ee
+
+    from src.config import get_config
+
+    project = os.getenv("GEE_PROJECT") or get_config().get("gee", {}).get("project")
+    if not project:
+        raise RuntimeError(
+            "Earth Engine exige um projeto Cloud. Defina GEE_PROJECT (env) ou "
+            "gee.project em src/config.yaml (veja o ID no Earth Engine Code Editor)."
+        )
 
     credentials_env = os.getenv("GEE_CREDENTIALS")
     if credentials_env:
         config_dir = Path.home() / ".config" / "earthengine"
         config_dir.mkdir(parents=True, exist_ok=True)
         (config_dir / "credentials").write_text(credentials_env, encoding="utf-8")
-        ee.Initialize()
+        ee.Initialize(project=project)
         return
     ee.Authenticate()
-    ee.Initialize()
+    ee.Initialize(project=project)
