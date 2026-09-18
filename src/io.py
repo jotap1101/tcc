@@ -53,8 +53,10 @@ class DriveClient:
             from google.oauth2.credentials import Credentials
             from googleapiclient.discovery import build
 
-            token = os.getenv("GDRIVE_TOKEN")
-            token_file = os.getenv("GDRIVE_TOKEN_FILE")
+            from src.utils import get_secret
+
+            token = get_secret("GDRIVE_TOKEN")
+            token_file = get_secret("GDRIVE_TOKEN_FILE")
             if token is None and token_file:
                 token = Path(token_file).read_text(encoding="utf-8")
             if not token:

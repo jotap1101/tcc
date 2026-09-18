@@ -10,6 +10,19 @@ import numpy as np
 import torch
 
 
+def get_secret(name: str) -> str | None:
+    """Lê um segredo de variável de ambiente ou dos Secrets do Kaggle."""
+    value = os.getenv(name)
+    if value:
+        return value
+    try:
+        from kaggle_secrets import UserSecretsClient
+
+        return UserSecretsClient().get_secret(name)
+    except Exception:
+        return None
+
+
 def set_all_seeds(seed: int) -> None:
     """Fixa as sementes de python, numpy e torch (cpu e cuda)."""
     random.seed(seed)
@@ -37,14 +50,14 @@ def authenticate_gee() -> None:
 
     from src.config import get_config
 
-    project = os.getenv("GEE_PROJECT") or get_config().get("gee", {}).get("project")
+    project = get_secret("GEE_PROJECT") or get_config().get("gee", {}).get("project")
     if not project:
         raise RuntimeError(
             "Earth Engine exige um projeto Cloud. Defina GEE_PROJECT (env) ou "
             "gee.project em src/config.yaml (veja o ID no Earth Engine Code Editor)."
         )
 
-    credentials_env = os.getenv("GEE_CREDENTIALS")
+    credentials_env = get_secret("GEE_CREDENTIALS")
     if credentials_env:
         config_dir = Path.home() / ".config" / "earthengine"
         config_dir.mkdir(parents=True, exist_ok=True)
