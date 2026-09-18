@@ -55,8 +55,10 @@ def _download_and_extract(workspace: pathlib.Path) -> None:
         repo_dir = extract_dir / "tcc-main"
         for rel in ("src", "data", "requirements-runtime.txt"):
             target = workspace / rel
-            if target.exists():
+            if target.is_dir():
                 shutil.rmtree(target)
+            elif target.is_file():
+                target.unlink(missing_ok=True)
         for rel in ("src", "requirements-runtime.txt"):
             source = repo_dir / rel
             if source.is_dir():
