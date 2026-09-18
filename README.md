@@ -43,33 +43,54 @@ tcc/
 ├── AGENTS.md              # fonte de verdade para regras de código e formatação
 ├── PLAN.md                # roteiro de implementação
 ├── pyproject.toml         # uv, ruff, mypy, pytest
-├── src/tcc/               # pacote Python compartilhado (lógica reutilizável)
+├── requirements-runtime.txt  # versões pinadas instaladas pelo notebook 00
+├── src/                   # pacote Python compartilhado (config, io, utils, ...)
 ├── tests/                 # pytest apenas sobre src/
 ├── notebooks/             # estágios .ipynb sequenciais
-├── data/                  # dados espectrais e máscaras (ignorado pelo git)
-├── models/                # pesos dos modelos (ignorado pelo git)
-└── artifacts/             # métricas e figuras (ignorado pelo git)
+├── data/                  # espelho local de MyDrive/tcc/data (ignorado pelo git)
+├── models/                # espelho local de MyDrive/tcc/models (ignorado pelo git)
+└── artifacts/             # espelho local de MyDrive/tcc/artifacts (ignorado pelo git)
+```
+
+O **armazenamento canônico** de dados e artefatos não fica no repositório: tudo é gravado dentro da pasta **`tcc/` na raiz do Google Drive** (`MyDrive/tcc/`), acessada ou criada pelos próprios notebooks (junto com todas as subpastas de que precisarem). Nenhuma estrutura pré-criada é assumida:
+
+```bash
+MyDrive/tcc/                       # raiz de armazenamento (criada/acessada pelos notebooks)
+├── data/{raw,interim,processed,external}/
+│   └── raw|interim/{mapbiomas,alphaearth,s2dr,...}/   # ground truth por fonte
+├── models/{unet,segformer}/
+├── artifacts/{metrics,figures,runs}/
+├── repo/src/                      # espelho do código-fonte (entrega do src/ ao runtime)
+├── secrets/                       # tokens OAuth persistidos — nunca versionar
+└── ...                            # qualquer subpasta necessária ao pipeline
 ```
 
 ## Pré-requisitos
 
 - Python com PyTorch e Hugging Face Transformers.
-- Conta no Google Earth Engine (autenticação via conta de serviço).
-- Ambiente de execução com GPU (prioritariamente Kaggle; Google Colab como alternativa).
+- Conta no Google Earth Engine (autenticação OAuth com a conta principal via `ee.Authenticate()`).
+- Google Drive com a pasta `tcc/` na raiz — se já existir é reutilizada; se não existir, os notebooks a criam automaticamente.
+- Ambiente de execução com GPU (Google Colab ou Kaggle).
 
 ## Execução
 
-O projeto segue um layout híbrido: os notebooks Jupyter orquestram cada estágio, enquanto a lógica reutilizável reside no pacote `src/tcc/`. Os notebooks devem ser executados em ordem numérica e resolver todos os caminhos de entrada a partir de `src/tcc/config.py`.
+O projeto segue um layout híbrido: os notebooks Jupyter orquestram cada estágio, enquanto a lógica reutilizável reside no pacote `src/`. Os notebooks devem ser executados em ordem numérica e resolver todos os caminhos de entrada a partir de `src/config.py`.
 
-O treinamento e o armazenamento de artefatos ocorrem no Kaggle; linting, verificação de tipos e testes rodam no CI (GitHub Actions). Consulte o `AGENTS.md` para as regras operacionais completas.
+Os notebooks são **agnósticos de plataforma**: o mesmo `.ipynb` executa no Google Colab ou no Kaggle e roda perfeitamente nas duas (mesmo protocolo: código, sementes, versões e processamento — não necessariamente saída bit-a-bit entre hardwares diferentes). O pacote `src/` é entregue ao runtime pelo notebook `00` via `sync_repo_to_workspace()`: se o espelho `MyDrive/tcc/repo/src/` já existir ele é copiado; se não existir (primeiro run), o notebook baixa o repositório público e cria o espelho no próprio Drive — os notebooks geram a estrutura dentro de `tcc/`. Todo dado, arquivo, modelo, métrica, figura e log gerado é armazenado dentro da pasta **`tcc/` na raiz do Google Drive** (`MyDrive/tcc/`); os notebooks acessam essa pasta se já existir ou a criam — assim como todas as subpastas de que precisam — sem assumir estrutura preexistente. Detecção de ambiente, montagem do Drive e resolução de caminhos ficam centralizados em `src/` (ex.: `io.py`); no Colab o Drive é montado nativamente e no Kaggle é acessado via Drive API (token OAuth + cache local) — sempre pela mesma chamada única. Cada fonte de ground truth (MapBiomas, AlphaEarth, S2DR, ...) tem sua própria célula de código e subpasta (`data/.../<fonte>/`).
+
+O treinamento e o armazenamento de artefatos ocorrem no Google Drive (a partir do Colab ou do Kaggle); linting, verificação de tipos e testes rodam no CI (GitHub Actions). Consulte o `AGENTS.md` para as regras operacionais completas.
+
+**Autenticação dentro dos notebooks:** todo processo de autenticação (GEE, Hugging Face, etc.) é executado nas próprias células de código dos notebooks, usando as bibliotecas/frameworks necessários (ex.: autenticação OAuth no GEE com `ee.Authenticate()`, usando a conta principal). As credenciais são lidas apenas de variáveis de ambiente — nunca commitadas, logadas ou expostas. Não há etapa de autenticação externa ou manual fora dos notebooks.
+
+Para garantir o mesmo protocolo de execução nas duas plataformas, o notebook `00` instala versões fixadas das bibliotecas (`requirements-runtime.txt`, já que os ambientes padrão do Colab e do Kaggle diferem) e cada execução registra o ambiente completo (versões, sementes, hash de config/commit/manifest), com flags determinísticas do PyTorch habilitadas (`cudnn.deterministic`, `use_deterministic_algorithms`). Os notebooks são versionados com outputs limpos e as convenções estruturais (nomenclatura, markdown sobre cada célula de código, outputs vazios) são validadas no CI. As operações de armazenamento são idempotentes: reexecuções criam/abrem a árvore `tcc/` com segurança e nunca sobrescrevem silenciosamente artefatos versionados.
 
 ## Status
 
-Estágio inicial: o código base, as dependências e a configuração ativa de ferramentas ainda estão em construção.
+Scaffolding pronto: `pyproject.toml`, `requirements-runtime.txt`, `src/` (config, io, utils), `tests/`, CI e regras documentadas. Os notebooks de estágio (`.ipynb`) ainda não foram criados.
 
 ## Contribuição
 
-Siga as convenções definidas no `AGENTS.md`: layout híbrido notebook/pacote, identificadores em en-US, markdown dos notebooks em pt-BR e configuração reprodutível. Credenciais nunca devem ser commitadas.
+Siga as convenções definidas no `AGENTS.md`: layout híbrido notebook/pacote, identificadores em en-US, markdown dos notebooks em pt-BR e configuração reprodutível. Princípios de engenharia de software (DRY, responsabilidade única, KISS, YAGNI, separação de conceitos) se aplicam a todo o código — inclusive às células dos notebooks, que nunca duplicam a lógica já existente em `src/`. Credenciais nunca devem ser commitadas.
 
 ## Licença
 

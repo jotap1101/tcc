@@ -30,9 +30,10 @@ Research project (deep learning / computer vision) on **semantic segmentation of
 
 ### Code Architecture
 
-- Development uses a **hybrid layout**: each stage is an **isolated Jupyter Notebook (`.ipynb`)** acting as an orchestration/visualization layer that imports reusable logic from the shared **`src/tcc/`** package (pure Python).
-- `ruff`, `mypy` and `pytest` target **`src/`** and **`tests/`** only — never notebooks. Notebooks are not linted, typed or unit-tested directly.
-- Notebooks run in numeric order and must resolve every input path from `src/tcc/config.py` (no hardcoded paths).
+- Development uses a **hybrid layout**: each stage is an **isolated Jupyter Notebook (`.ipynb`)** acting as an orchestration/visualization layer that imports reusable logic from the shared **`src/`** package (pure Python).
+- `ruff`, `mypy` and `pytest` target **`src/`** and **`tests/`** only — never notebooks. Notebooks are not linted, typed or unit-tested directly (their structural conventions are validated in CI).
+- Notebooks run in numeric order and must resolve every input path from `src/config.py` (no hardcoded paths).
+- Notebooks are committed with **cleared outputs** (no saved cell outputs/figures); strip outputs before committing — CI enforces it, keeping diffs clean and free of platform-specific paths.
 
 ### Modularity
 
@@ -54,6 +55,11 @@ Research project (deep learning / computer vision) on **semantic segmentation of
 - Every code cell must include short, objective technical comments (above or to the right of each critical instruction) explaining its technical role.
 - Comment language: **pt-br**, impersonal and neutral.
 
+### Code quality & engineering principles
+
+- Apply standard software engineering principles to **every notebook cell and to `src/`**: **DRY** — never duplicate logic; notebooks import from `src/` instead of re-typing code the package already provides; **Single Responsibility** — one concern per cell/function; **KISS** — prefer the simplest correct solution; **YAGNI** — no speculative or unused code; **Separation of Concerns** — orchestration/visualization in notebooks, reusable logic in `src/`; and **readability** — clear en-US identifiers, pt-br comments, explicit and deterministic code.
+- Notebook code follows the same quality bar as `src/`: idiomatic, consistent with repo conventions, and free of dead code or duplicated blocks.
+
 ## Tech Stack & Conventions
 
 - **Package manager:** `uv`.
@@ -64,19 +70,25 @@ Research project (deep learning / computer vision) on **semantic segmentation of
 
 ### Reproducibility
 
-- Single source of truth for configuration: `src/tcc/config.yaml` (loaded by `config.py`).
+- Single source of truth for configuration: `src/config.yaml` (loaded by `config.py`).
 - Fix all seeds (`python`/`numpy`/`torch`/`cuda`); commit `uv.lock`; log the full environment per run.
-- Data is registered in a versioned `manifest.parquet`; heavy artifacts live outside git (`data/`, `models/`, `artifacts/`).
+- **Runtime versions pinned for cross-platform consistency**: Colab and Kaggle ship different default environments, so notebook `00` installs the pinned versions in `requirements-runtime.txt` and every run logs the full environment (versions, seeds, config hash, commit SHA, manifest hash).
+- **Torch determinism enforced**: `torch.backends.cudnn.deterministic = True`, `torch.backends.cudnn.benchmark = False` and `torch.use_deterministic_algorithms(True)` where supported; any residual nondeterminism must be documented.
+- Data is registered in a versioned `manifest.parquet`; heavy artifacts live outside git, in the Drive `tcc/` root (optionally mirrored in local git-ignored `data/`, `models/`, `artifacts/`).
 
 ### Directory Structure & Artifacts
 
-- `data/{raw,interim,processed,external}` — spectral data and masks.
-- `models/` and `artifacts/` — weights, metrics and figures (git-ignored).
+- The canonical artifact tree lives inside the Drive `tcc/` root (see "Platform Agnosticism & Storage"): `tcc/data/{raw,interim,processed,external}`, `tcc/models/`, `tcc/artifacts/`, and any deeper subfolders the pipeline needs. Notebooks create this tree on demand.
+- Local `data/`, `models/` and `artifacts/` are git-ignored and, at most, mirror the Drive tree — the Drive `tcc/` root is authoritative. Exception: `data/external/` holds small immutable reference inputs (e.g., the IBGE mesh) and **is versioned** in the repo.
+- **Versioned reference data**: reference inputs (e.g., `data/external/ibge/mg_rg_immediatas_2025/`) are tracked in git and delivered to the runtime alongside `src/` by `sync_repo_to_workspace()`; `data/{raw,interim,processed}` remain git-ignored mirrors of the Drive.
+- **Ground truth by source**: each ground-truth source (MapBiomas, AlphaEarth, S2DR, and any future source) is integrated in its **own dedicated code cell** and stored in its **own subfolder** under `MyDrive/tcc/data/{raw,interim}/<source>/`; adding a source means adding a cell, never modifying another source's logic.
 - Notebook naming: `NN_verb_snake_case.ipynb` inside `notebooks/`, executed in numeric order.
 
 ### Secrets & Authentication
 
-- Credentials (GEE service account, Hugging Face token, Kaggle secrets) are read from environment variables only and are **never committed**.
+- Credentials (GEE OAuth token, Hugging Face token, Kaggle secrets) are read from environment variables only and are **never committed**, logged, or exposed.
+- Service-account key files and other secret files (e.g., GEE `*.json` keys, `.env`) are **git-ignored** and never tracked — GEE is authenticated via OAuth with the primary account, so such keys are not required.
+- **Authentication happens inside the notebooks themselves**: the code cells execute the authentication instructions with the required libraries/frameworks (e.g., GEE via OAuth with the primary account using `ee.Authenticate()`, Hugging Face `login`, Kaggle secrets), so every notebook run self-authenticates on the platform where it executes. There is no external or manual authentication step outside the notebooks.
 
 ### State of the art
 
@@ -90,8 +102,26 @@ Use the available MCP servers actively for repository inspection, architectural 
 ## Execution Environment (critical)
 
 - Code is **generated in this local environment**, but is **never executed or tested locally**. Do **not install any library** in the project context or globally — even for testing.
-- The code will be **executed and its artifacts stored (files, patches, etc.) on Kaggle**, with Google Colab as a secondary option. The target environment is still undecided, so code must be **platform-agnostic** (not tied to a specific platform) while prioritizing Kaggle-first storage.
+- The code will be **executed on Google Colab or Kaggle** (Kaggle is mandatory). Notebooks must therefore be **platform-agnostic**: the same `.ipynb` runs correctly on either platform and is worked the same way (same protocol, seeds, versions and processing) — not bit-identical outputs across different hardware.
 - **Linting, type checking and tests run on CI (GitHub Actions)** on push — no local installation required.
+
+## Platform Agnosticism & Storage (critical)
+
+### Platform-agnostic notebooks
+
+- **Rule:** every notebook must run **correctly** on **Google Colab** and **Kaggle**, executing the same protocol (same code, seeds, config and processing) — results are worked identically, not required to be bit-identical across platforms. No platform-specific APIs, magic commands, hardcoded paths, or environment-dependent logic in notebooks.
+- All platform detection, Drive mounting, and path resolution is centralized in `src/` (e.g., `io.py`, `config.py`) — the **only** place environment specifics live. Notebooks consume that abstraction only.
+- **`src/` + reference data delivery to the runtime**: notebook `00` calls `sync_repo_to_workspace()` in `src/io.py` — it copies `MyDrive/tcc/repo/src/` (and `data/external/`, when present) into the workspace when the mirror exists, or **bootstraps it when it does not** (first run): it downloads the public repository (`github.com/jotap1101/tcc`) and writes them into `MyDrive/tcc/repo/`, creating the mirror itself. The workspace is added to `sys.path`; no manual upload is required.
+- **Drive on Kaggle**: Kaggle has no native Drive mount; `src/io.py` accesses Drive via the Google Drive API (OAuth token of the primary account from `GDRIVE_TOKEN`/`GDRIVE_TOKEN_FILE`) with a local cache under `/kaggle/working/drive`. Notebook code stays uniform — a single `mount_drive()` / `ensure_storage_root()` call.
+- Notebooks must be deterministic and platform-consistent: same seeds, same config, same protocol on both platforms; determinism refers to the protocol, not bit-identical outputs across different hardware.
+
+### Google Drive `tcc/` root — canonical storage
+
+- **Rule:** the `tcc/` folder at the **root of Google Drive** (`MyDrive/tcc/`) is the single, canonical storage root for the entire project.
+- Every datum, file, model, metric, figure, log, or artifact produced by the pipeline is stored **inside** `tcc/`, organized in subfolders of any required depth. Nothing is persisted outside it.
+- Notebooks must **access** `tcc/` when it already exists, or **create it** (and every needed subfolder, recursively) when it does not. The notebooks themselves generate the folder structure — no pre-created layout may be assumed.
+- Storage operations are **idempotent and re-runnable**: `ensure_storage_root()` succeeds whether or not `tcc/` exists, and re-running a notebook never corrupts or silently overwrites versioned artifacts (manifest, data, weights) — new runs write versioned outputs (e.g., `run_id` subfolders) or require explicit confirmation to overwrite.
+- Storage paths are resolved from `src/config.yaml` / `config.py`; notebooks never hardcode Drive paths.
 
 ## Repository Structure
 
@@ -100,4 +130,4 @@ Use the available MCP servers actively for repository inspection, architectural 
 
 ## Status
 
-Early-stage: no base code, dependencies, or active tooling configuration yet. The `.gitignore` is Python-focused and references uv, ruff, mypy, pytest, Jupyter, Streamlit, and Marimo as expected tools.
+Scaffolding in place: `pyproject.toml`, `requirements-runtime.txt`, `src/` (config, io, utils), `tests/`, CI and this rulebook. Stage notebooks (`.ipynb`) not yet created.
