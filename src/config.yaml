@@ -19,7 +19,7 @@ data:
   crs: "EPSG:31983"  # SIRGAS 2000 / UTM 23S (zona UTM da RGI de Guaxupé)
   export:
     scale: 10  # resolução nativa das bandas B2/B3/B4/B8 (10 m)
-    max_pixels: 50000000
+    max_pixels: 100000000  # acima dos ~58.7M pixels do AOI (10 m) para a exportação não falhar
 
 ground_truth:
   # Cada fonte é integrada em uma célula de código própria e armazenada em uma
