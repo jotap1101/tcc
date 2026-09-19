@@ -137,6 +137,17 @@ class DriveClient:
         media = service.files().get_media(fileId=files[0]["id"]).execute()
         local_path.write_bytes(media)
 
+    def exists(self, remote_path: str) -> bool:
+        """Indica se um arquivo remoto existe no Drive (busca por nome)."""
+        name = remote_path.split("/")[-1]
+        res = (
+            self._build_service()
+            .files()
+            .list(q=f"name='{name}' and trashed=false", fields="files(id)")
+            .execute()
+        )
+        return bool(res.get("files"))
+
     def upload_tree(self, local_dir: Path, remote_prefix: str) -> None:
         """Sobe recursivamente um diretório local para um prefixo remoto no Drive."""
         for path in sorted(local_dir.rglob("*")):

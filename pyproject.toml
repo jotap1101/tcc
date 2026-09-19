@@ -16,6 +16,7 @@ dependencies = [
     "seaborn",
     "rasterio",
     "earthengine-api",
+    "geopandas",
     "huggingface-hub",
     "transformers",
     "torch",

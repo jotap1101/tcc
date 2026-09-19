@@ -4,6 +4,8 @@ torch==2.14.0
 torchvision==0.29.0
 transformers==5.17.0
 earthengine-api==1.7.43
+geopandas==1.1.4
+pyogrio==0.13.0
 huggingface-hub==1.32.0
 numpy==2.5.3
 pandas==3.0.6

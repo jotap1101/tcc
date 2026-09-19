@@ -16,6 +16,10 @@ data:
   cloud_threshold: 20  # porcentagem máxima de nuvens (QA60)
   patch_size: 512
   coffee_min_ratio: 0.0
+  crs: "EPSG:31983"  # SIRGAS 2000 / UTM 23S (zona UTM da RGI de Guaxupé)
+  export:
+    scale: 10  # resolução nativa das bandas B2/B3/B4/B8 (10 m)
+    max_pixels: 50000000
 
 ground_truth:
   # Cada fonte é integrada em uma célula de código própria e armazenada em uma
@@ -35,6 +39,7 @@ storage:
   drive_root: "tcc"  # pasta canônica na raiz do Google Drive (MyDrive/<drive_root>)
   subfolders:
     data_raw: "data/raw"
+    data_raw_sentinel2: "data/raw/sentinel2"
     data_interim: "data/interim"
     data_processed: "data/processed"
     data_external: "data/external"
