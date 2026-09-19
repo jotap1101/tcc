@@ -106,13 +106,28 @@ def wait_for_task(
     timeout_seconds: int = 7200,
     poll_interval: int = 30,
 ) -> str:
-    """Aguarda a conclusão da tarefa GEE, imprimindo o progresso a cada sondagem."""
+    """Aguarda a conclusão da tarefa GEE, imprimindo o progresso percentual.
+
+    O progresso (0.0 a 1.0) é lido de ee.data.getOperation, que o GEE expõe
+    nas operações de exportação; estados retornados (SUCCEEDED/FAILED) são
+    normalizados para o mesmo vocabulário de task.status() (COMPLETED).
+    """
+    import ee
+
     deadline = time.monotonic() + timeout_seconds
-    state = str(task.status().get("state", "UNKNOWN"))
-    while state in ("READY", "RUNNING") and time.monotonic() < deadline:
+    state = "READY"
+    while state in ("READY", "PENDING", "RUNNING") and time.monotonic() < deadline:
         time.sleep(poll_interval)
-        state = str(task.status().get("state", "UNKNOWN"))
-        print(f"  Tarefa GEE: {state}")
+        operation = ee.data.getOperation(task.name)
+        metadata = operation.get("metadata", {})
+        state = str(metadata.get("state", "UNKNOWN"))
+        if state == "SUCCEEDED":
+            state = "COMPLETED"
+        progress = metadata.get("progress")
+        if isinstance(progress, (int, float)):
+            print(f"  Tarefa GEE: {state} ({progress * 100:.1f}%)")
+        else:
+            print(f"  Tarefa GEE: {state}")
     if state != "COMPLETED":
         raise RuntimeError(f"Tarefa GEE finalizou com estado: {state}")
     return state
