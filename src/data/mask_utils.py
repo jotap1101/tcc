@@ -28,6 +28,15 @@ def mask_file_name(source: str, region_code: str, year: int) -> str:
     return f"mask_{source}_{region_code}_{year}"
 
 
+def source_mask_path(source_name: str, storage_paths: dict[str, Path]) -> Path:
+    """Caminho canônico do GeoTIFF da máscara da fonte (data/interim/<fonte>/)."""
+    config = get_config()
+    file_prefix = mask_file_name(
+        source_name, config["aoi"]["region_code"], reference_year()
+    )
+    return storage_paths["data_interim"] / source_name / f"{file_prefix}.tif"
+
+
 def build_mapbiomas_mask(aoi: Any) -> Any:
     """Máscara binária de café da MapBiomas (classe 46) para o ano de referência.
 
@@ -148,7 +157,7 @@ def ensure_source_mask(
     region_code = config["aoi"]["region_code"]
     year = reference_year()
     file_prefix = mask_file_name(source_name, region_code, year)
-    target_path = storage_paths["data_interim"] / source_name / f"{file_prefix}.tif"
+    target_path = source_mask_path(source_name, storage_paths)
     staging_folder = config["storage"]["drive_root"]
 
     # Reutiliza o GeoTIFF já exportado (execuções repetidas não reprocessam).

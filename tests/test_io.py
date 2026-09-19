@@ -68,3 +68,10 @@ def test_persist_bytes_local(tmp_path, monkeypatch) -> None:
     target = tmp_path / "tcc" / "artifacts" / "figures" / "preview.png"
     io.persist_bytes(target, b"\x89PNG")
     assert target.read_bytes() == b"\x89PNG"
+
+
+def test_ensure_local_copy_returns_path_on_local(tmp_path, monkeypatch) -> None:
+    """No modo local, ensure_local_copy deve retornar o próprio caminho."""
+    monkeypatch.setattr(io, "detect_platform", lambda: "local")
+    path = tmp_path / "mask.tif"
+    assert io.ensure_local_copy(path) == path

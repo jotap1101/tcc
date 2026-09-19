@@ -132,7 +132,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 ### Phase 2 — Ground Truth
 
-- [ ] `03_mask_sources_comparison.ipynb`
+- [x] `03_mask_sources_comparison.ipynb`
 - [ ] `04_mask_finalization.ipynb`
 
 ### Phase 3 — Preprocessing & Dataset
@@ -167,6 +167,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 - [x] `config.py` + `config.yaml`
 - [ ] `data/dataset.py`, `data/augmentations.py`, `data/manifest.py`
 - [x] `data/mask_utils.py` (uma função por fonte de ground truth), `data/gee_client.py`
+- [x] `data/mask_comparison.py` (diagnóstico comparativo das fontes — estágio 03)
 - [ ] `losses.py` (Dice + Focal + Boundary)
 - [ ] `metrics.py` (IoU, F1, Precision, Recall)
 - [ ] `trainer.py` (protocolo de treino único, parametrizado pelo modelo — sem duplicação entre notebooks 09/10)

@@ -50,6 +50,7 @@ storage:
     data_external: "data/external"
     models: "models"
     artifacts_metrics: "artifacts/metrics"
+    artifacts_metrics_ground_truth: "artifacts/metrics/ground_truth"
     artifacts_figures: "artifacts/figures"
     artifacts_runs: "artifacts/runs"
     secrets: "secrets"

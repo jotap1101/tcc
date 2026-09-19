@@ -130,15 +130,11 @@ class DriveClient:
     def download(self, remote_path: str, local_path: Path) -> None:
         """Faz download de um arquivo remoto do Drive para um caminho local."""
         service = self._build_service()
-        name = remote_path.split("/")[-1]
-        res = (
-            service.files().list(q=f"name='{name}' and trashed=false", fields="files(id)").execute()
-        )
-        files = res.get("files", [])
-        if not files:
+        file_id = self._file_id(remote_path)
+        if file_id is None:
             raise FileNotFoundError(f"Arquivo não encontrado no Drive: {remote_path}")
         local_path.parent.mkdir(parents=True, exist_ok=True)
-        media = service.files().get_media(fileId=files[0]["id"]).execute()
+        media = service.files().get_media(fileId=file_id).execute()
         local_path.write_bytes(media)
 
     def _file_id(self, remote_path: str) -> str | None:
@@ -213,6 +209,20 @@ def path_exists(path: Path) -> bool:
     if detect_platform() == "kaggle":
         return get_drive_client().exists(str(path.relative_to(mount_drive())))
     return path.exists()
+
+
+def ensure_local_copy(path: Path) -> Path:
+    """Garante uma cópia local de um arquivo do Drive canônico para leitura.
+
+    No Colab/local o caminho já é local (Drive montado ou raiz local); no Kaggle,
+    se o arquivo ainda não está no cache local, faz o download da cópia remota
+    canônica. Idempotente: reexecuções reutilizam o arquivo já baixado na sessão.
+    """
+    if detect_platform() != "kaggle":
+        return path
+    if not path.is_file():
+        get_drive_client().download(str(path.relative_to(mount_drive())), path)
+    return path
 
 
 def persist_bytes(path: Path, data: bytes) -> None:
