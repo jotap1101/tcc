@@ -25,6 +25,9 @@ ground_truth:
   # Cada fonte é integrada em uma célula de código própria e armazenada em uma
   # subpasta própria sob MyDrive/tcc/data/interim/<fonte>. O ano de referência
   # das máscaras é derivado das datas do mosaico (data.dates.start).
+  # Fonte definitiva escolhida no estágio 04 com base no diagnóstico do estágio 03
+  # (AlphaEarth: modelo dedicado a café; MapBiomas subdetecta — recall 0,416).
+  chosen_source: "alphaearth"
   sources:
     mapbiomas:
       enabled: true
@@ -47,6 +50,7 @@ storage:
     data_raw_sentinel2: "data/raw/sentinel2"
     data_interim: "data/interim"
     data_processed: "data/processed"
+    data_processed_ground_truth: "data/processed/ground_truth"
     data_external: "data/external"
     models: "models"
     artifacts_metrics: "artifacts/metrics"

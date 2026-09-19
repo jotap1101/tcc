@@ -205,9 +205,9 @@ def render_comparison_figure(mask_set: MaskSet, reference: str) -> bytes:
         raise ValueError("O diagnóstico comparativo exige pelo menos duas fontes.")
     other = others[0]
 
-    reference_mask = _display_array(mask_set.masks[reference])
-    other_mask = _display_array(mask_set.masks[other])
-    agreement = _display_array(
+    reference_mask = display_array(mask_set.masks[reference])
+    other_mask = display_array(mask_set.masks[other])
+    agreement = display_array(
         agreement_labels(mask_set.masks[reference], mask_set.masks[other])
     )
 
@@ -238,7 +238,10 @@ def agreement_labels(
     return labels
 
 
-def _display_array(mask: np.ndarray, max_dim: int = 4096) -> np.ndarray:
+COFFEE_COLORS = ["#f2f2f2", "#7b1fa2"]
+
+
+def display_array(mask: np.ndarray, max_dim: int = 4096) -> np.ndarray:
     """Reduz o array para a figura quando a maior dimensão excede o limite."""
     height, width = mask.shape
     stride = max(1, max(height, width) // max_dim)
@@ -251,7 +254,7 @@ def _plot_mask(axis: Any, mask: np.ndarray, title: str) -> None:
     """Exibe uma máscara binária (café em roxo sobre fundo claro)."""
     from matplotlib.colors import ListedColormap
 
-    axis.imshow(mask, cmap=ListedColormap(["#f2f2f2", "#7b1fa2"]), vmin=0, vmax=1)
+    axis.imshow(mask, cmap=ListedColormap(COFFEE_COLORS), vmin=0, vmax=1)
     axis.set_title(title)
     axis.set_xticks([])
     axis.set_yticks([])

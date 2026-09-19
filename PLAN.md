@@ -133,7 +133,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 ### Phase 2 — Ground Truth
 
 - [x] `03_mask_sources_comparison.ipynb`
-- [ ] `04_mask_finalization.ipynb`
+- [x] `04_mask_finalization.ipynb` — fonte escolhida (AlphaEarth) → máscara binária final
 
 ### Phase 3 — Preprocessing & Dataset
 
@@ -168,6 +168,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 - [ ] `data/dataset.py`, `data/augmentations.py`, `data/manifest.py`
 - [x] `data/mask_utils.py` (uma função por fonte de ground truth), `data/gee_client.py`
 - [x] `data/mask_comparison.py` (diagnóstico comparativo das fontes — estágio 03)
+- [x] `data/mask_finalization.py` (finalização da máscara — estágio 04)
 - [ ] `losses.py` (Dice + Focal + Boundary)
 - [ ] `metrics.py` (IoU, F1, Precision, Recall)
 - [ ] `trainer.py` (protocolo de treino único, parametrizado pelo modelo — sem duplicação entre notebooks 09/10)
