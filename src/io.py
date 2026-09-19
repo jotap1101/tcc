@@ -208,6 +208,21 @@ def get_drive_client() -> DriveClient:
     return DriveClient()
 
 
+def path_exists(path: Path) -> bool:
+    """Indica se um caminho existe no Drive canônico (remoto no Kaggle, local no Colab)."""
+    if detect_platform() == "kaggle":
+        return get_drive_client().exists(str(path.relative_to(mount_drive())))
+    return path.exists()
+
+
+def persist_bytes(path: Path, data: bytes) -> None:
+    """Persiste bytes em um caminho do Drive (upload no Kaggle; escrita direta no Colab)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    if detect_platform() == "kaggle":
+        get_drive_client().upload(path, str(path.relative_to(mount_drive())))
+
+
 def relocate_exported_file(
     file_name: str,
     staging_folder: str,

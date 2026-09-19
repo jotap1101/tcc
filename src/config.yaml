@@ -23,12 +23,17 @@ data:
 
 ground_truth:
   # Cada fonte é integrada em uma célula de código própria e armazenada em uma
-  # subpasta própria sob MyDrive/tcc/data/{raw,interim}/<fonte>.
+  # subpasta própria sob MyDrive/tcc/data/interim/<fonte>. O ano de referência
+  # das máscaras é derivado das datas do mosaico (data.dates.start).
   sources:
     mapbiomas:
       enabled: true
+      collection_id: "projects/mapbiomas-public/assets/brazil/lulc/collection9/mapbiomas_collection90_integration_v1"
+      coffee_class: 46  # classe 3.2.2.1 Café (Coleção 9, banda classification_<ano>)
     alphaearth:
       enabled: true
+      collection_id: "projects/forestdatapartnership/assets/coffee/model_2025a"
+      probability_threshold: 0.95  # limiar de probabilidade de presença de café
     s2dr:
       enabled: false
 

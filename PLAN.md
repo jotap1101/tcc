@@ -118,7 +118,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 ### Phase 0 — Setup
 
-- [ ] `00_setup_environment.ipynb` — platform detection, Drive mount + `tcc/` root resolution, `src/` delivery (`sync_repo_to_workspace()`, com bootstrap automático quando o espelho não existe), dependency install (`requirements-runtime.txt`), GEE authentication (executed inside notebook cells), seeds + deterministic flags, config load, environment self-check
+- [x] `00_setup_environment.ipynb` — platform detection, Drive mount + `tcc/` root resolution, `src/` delivery (`sync_repo_to_workspace()`, com bootstrap automático quando o espelho não existe), dependency install (`requirements-runtime.txt`), GEE authentication (executed inside notebook cells), seeds + deterministic flags, config load, environment self-check
 - [x] `src/io.py` (platform detection, Drive mount, `tcc/` root ensure/resolve, `src/` delivery) + unit tests
 - [x] `pyproject.toml` (uv, ruff, mypy, pytest)
 - [x] `requirements-runtime.txt` (versões pinadas instaladas pelo notebook 00)
@@ -127,8 +127,8 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 ### Phase 1 — Acquisition
 
-- [ ] `01_gee_sentinel2_acquisition.ipynb` — IBGE mesh import (AOI polygon) + Sentinel-2 acquisition
-- [ ] `02_gee_reference_masks.ipynb`
+- [x] `01_gee_sentinel2_acquisition.ipynb` — IBGE mesh import (AOI polygon) + Sentinel-2 acquisition
+- [x] `02_gee_reference_masks.ipynb`
 
 ### Phase 2 — Ground Truth
 
@@ -166,7 +166,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 - [x] `config.py` + `config.yaml`
 - [ ] `data/dataset.py`, `data/augmentations.py`, `data/manifest.py`
-- [ ] `data/mask_utils.py` (uma função por fonte de ground truth), `data/gee_client.py`
+- [x] `data/mask_utils.py` (uma função por fonte de ground truth), `data/gee_client.py`
 - [ ] `losses.py` (Dice + Focal + Boundary)
 - [ ] `metrics.py` (IoU, F1, Precision, Recall)
 - [ ] `trainer.py` (protocolo de treino único, parametrizado pelo modelo — sem duplicação entre notebooks 09/10)

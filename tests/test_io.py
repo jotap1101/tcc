@@ -49,3 +49,22 @@ def test_relocate_exported_file_local(tmp_path, monkeypatch) -> None:
 
     assert not staging.exists()
     assert target.read_bytes() == b"mosaic"
+
+
+def test_path_exists_local(tmp_path, monkeypatch) -> None:
+    """No modo local, path_exists reflete a existência do arquivo no sistema."""
+    monkeypatch.setattr(io, "detect_platform", lambda: "local")
+    target = tmp_path / "tcc" / "data" / "interim" / "mapbiomas" / "mask.tif"
+    target.parent.mkdir(parents=True)
+
+    assert not io.path_exists(target)
+    target.write_bytes(b"mask")
+    assert io.path_exists(target)
+
+
+def test_persist_bytes_local(tmp_path, monkeypatch) -> None:
+    """No modo local, persist_bytes escreve os bytes no caminho informado."""
+    monkeypatch.setattr(io, "detect_platform", lambda: "local")
+    target = tmp_path / "tcc" / "artifacts" / "figures" / "preview.png"
+    io.persist_bytes(target, b"\x89PNG")
+    assert target.read_bytes() == b"\x89PNG"

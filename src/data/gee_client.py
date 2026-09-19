@@ -74,19 +74,23 @@ def build_annual_mosaic(collection: Any, aoi: Any) -> Any:
     return collection.median().clip(aoi)
 
 
-def export_mosaic_to_drive(
-    mosaic: Any,
+def export_image_to_drive(
+    image: Any,
     description: str,
     folder: str,
     file_name_prefix: str,
+    region: Any,
+    scale: int,
+    resampling: str = "bilinear",
 ) -> Any:
-    """Dispara a exportação do mosaico em GeoTIFF para o Drive (tarefa assíncrona).
+    """Dispara a exportação de uma imagem em GeoTIFF para o Drive (assíncrona).
 
     O parâmetro ``folder`` do GEE aceita apenas um ÚNICO nome de pasta na raiz
     do Drive — subcaminhos como ``tcc/data/raw`` são tratados como nome literal
     e criam uma pasta com barras na raiz. Por isso o export é feito para uma
     pasta plana e o arquivo é realocado depois por io.relocate_exported_file().
-    CRS, escala e limite de pixels vêm de src/config.yaml (fonte única de verdade).
+    CRS, escala e limite de pixels vêm de src/config.yaml (fonte única de verdade);
+    ``resampling`` preserva o valor dos pixels (use 'near' para dados categóricos).
     """
     import ee
 
@@ -96,17 +100,40 @@ def export_mosaic_to_drive(
         )
     config = get_config()
     task = ee.batch.Export.image.toDrive(
-        image=mosaic,
+        image=image,
         description=description,
         folder=folder,
         fileNamePrefix=file_name_prefix,
         crs=config["data"]["crs"],
-        scale=int(config["data"]["export"]["scale"]),
-        region=mosaic.geometry(),
+        scale=scale,
+        region=region,
         maxPixels=int(config["data"]["export"]["max_pixels"]),
+        resampling=resampling,
     )
     task.start()
     return task
+
+
+def export_mosaic_to_drive(
+    mosaic: Any,
+    description: str,
+    folder: str,
+    file_name_prefix: str,
+) -> Any:
+    """Dispara a exportação do mosaico Sentinel-2 em GeoTIFF para o Drive.
+
+    Mantém a assinatura usada pelo notebook 01; a escala de processamento e o
+    CRS vêm de src/config.yaml e a região é a geometria do próprio mosaico.
+    """
+    config = get_config()
+    return export_image_to_drive(
+        image=mosaic,
+        description=description,
+        folder=folder,
+        file_name_prefix=file_name_prefix,
+        region=mosaic.geometry(),
+        scale=int(config["data"]["export"]["scale"]),
+    )
 
 
 def wait_for_task(
