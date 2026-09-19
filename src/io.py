@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -137,16 +138,55 @@ class DriveClient:
         media = service.files().get_media(fileId=files[0]["id"]).execute()
         local_path.write_bytes(media)
 
-    def exists(self, remote_path: str) -> bool:
-        """Indica se um arquivo remoto existe no Drive (busca por nome)."""
-        name = remote_path.split("/")[-1]
+    def _file_id(self, remote_path: str) -> str | None:
+        """Retorna o ID de um arquivo no caminho remoto, ou None se não existir."""
+        parts = [p for p in remote_path.split("/") if p]
+        if not parts:
+            return None
+        parent = "root"
+        for part in parts[:-1]:
+            folder_id = self._folder_id(part, parent)
+            if folder_id is None:
+                return None
+            parent = folder_id
         res = (
             self._build_service()
             .files()
-            .list(q=f"name='{name}' and trashed=false", fields="files(id)")
+            .list(
+                q=f"name='{parts[-1]}' and '{parent}' in parents and trashed=false",
+                fields="files(id)",
+            )
             .execute()
         )
-        return bool(res.get("files"))
+        files = res.get("files", [])
+        return files[0]["id"] if files else None
+
+    def exists(self, remote_path: str) -> bool:
+        """Indica se um arquivo remoto existe no caminho exato (pasta + nome)."""
+        return self._file_id(remote_path) is not None
+
+    def move(self, remote_src: str, remote_dst: str) -> None:
+        """Move um arquivo remoto para outro caminho no Drive (muda a pasta pai)."""
+        service = self._build_service()
+        src_parts = [p for p in remote_src.split("/") if p]
+        src_parent = "root"
+        for part in src_parts[:-1]:
+            src_parent = self._folder_id(part, src_parent) or src_parent
+        file_id = self._file_id(remote_src)
+        if file_id is None:
+            raise FileNotFoundError(f"Arquivo não encontrado no Drive: {remote_src}")
+        dst_parts = [p for p in remote_dst.split("/") if p]
+        if dst_parts[:-1]:
+            self.ensure_folder("/".join(dst_parts[:-1]))
+        dst_parent = "root"
+        for part in dst_parts[:-1]:
+            dst_parent = self._folder_id(part, dst_parent) or dst_parent
+        service.files().update(
+            fileId=file_id,
+            addParents=dst_parent,
+            removeParents=src_parent,
+            fields="id",
+        ).execute()
 
     def upload_tree(self, local_dir: Path, remote_prefix: str) -> None:
         """Sobe recursivamente um diretório local para um prefixo remoto no Drive."""
@@ -163,6 +203,29 @@ class DriveClient:
 def get_drive_client() -> DriveClient:
     """Retorna o cliente do Drive (Kaggle) para operações remotas."""
     return DriveClient()
+
+
+def relocate_exported_file(
+    file_name: str,
+    staging_folder: str,
+    target_path: Path,
+) -> None:
+    """Move um artefato exportado pelo GEE para o caminho canônico.
+
+    O GEE exporta para uma única pasta nomeada na raiz do Drive (sem aceitar
+    subcaminhos); após a conclusão da tarefa, o arquivo é realocado para o
+    caminho aninhado canônico resolvido do config.yaml.
+    """
+    if detect_platform() == "kaggle":
+        remote_src = f"{staging_folder}/{file_name}"
+        remote_dst = str(target_path.relative_to(mount_drive()))
+        get_drive_client().move(remote_src, remote_dst)
+        return
+    source = mount_drive() / staging_folder / file_name
+    if not source.is_file():
+        raise FileNotFoundError(f"Arquivo exportado não encontrado no Drive: {source}")
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(source), str(target_path))
 
 
 def mount_drive() -> Path:

@@ -82,10 +82,18 @@ def export_mosaic_to_drive(
 ) -> Any:
     """Dispara a exportação do mosaico em GeoTIFF para o Drive (tarefa assíncrona).
 
+    O parâmetro ``folder`` do GEE aceita apenas um ÚNICO nome de pasta na raiz
+    do Drive — subcaminhos como ``tcc/data/raw`` são tratados como nome literal
+    e criam uma pasta com barras na raiz. Por isso o export é feito para uma
+    pasta plana e o arquivo é realocado depois por io.relocate_exported_file().
     CRS, escala e limite de pixels vêm de src/config.yaml (fonte única de verdade).
     """
     import ee
 
+    if "/" in folder or "\\" in folder:
+        raise ValueError(
+            f"folder do GEE deve ser um único nome de pasta (sem separadores): {folder!r}"
+        )
     config = get_config()
     task = ee.batch.Export.image.toDrive(
         image=mosaic,
