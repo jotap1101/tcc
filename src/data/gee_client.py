@@ -81,7 +81,6 @@ def export_image_to_drive(
     file_name_prefix: str,
     region: Any,
     scale: int,
-    resampling: str = "bilinear",
 ) -> Any:
     """Dispara a exportação de uma imagem em GeoTIFF para o Drive (assíncrona).
 
@@ -90,7 +89,7 @@ def export_image_to_drive(
     e criam uma pasta com barras na raiz. Por isso o export é feito para uma
     pasta plana e o arquivo é realocado depois por io.relocate_exported_file().
     CRS, escala e limite de pixels vêm de src/config.yaml (fonte única de verdade);
-    ``resampling`` preserva o valor dos pixels (use 'near' para dados categóricos).
+    a reamostragem padrão do GEE (near) preserva valores categóricos (0/1).
     """
     import ee
 
@@ -108,7 +107,6 @@ def export_image_to_drive(
         scale=scale,
         region=region,
         maxPixels=int(config["data"]["export"]["max_pixels"]),
-        resampling=resampling,
     )
     task.start()
     return task
