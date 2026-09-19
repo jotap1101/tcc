@@ -62,9 +62,12 @@ class DriveClient:
                 token = Path(token_file).read_text(encoding="utf-8")
             if not token:
                 raise RuntimeError(
-                    "Acesso ao Drive no Kaggle exige credencial OAuth da conta principal "
-                    "em GDRIVE_TOKEN (ou GDRIVE_TOKEN_FILE). Persista o token em "
-                    "MyDrive/tcc/secrets/ na primeira autenticação."
+                    "Acesso ao Drive no Kaggle exige a credencial OAuth da conta principal "
+                    "em GDRIVE_TOKEN (ou GDRIVE_TOKEN_FILE). Se o segredo já existe no "
+                    "painel Add-ons > Secrets, confirme que ele está HABILITADO para este "
+                    "notebook (e reinicie o kernel); ao reimportar o notebook, os secrets "
+                    "vinculados ao kernel anterior não acompanham. Alternativa: persista o "
+                    "token em MyDrive/tcc/secrets/ na primeira autenticação."
                 )
             if token_file or token.lstrip().startswith("{"):
                 creds = Credentials.from_authorized_user_info(json.loads(token))
