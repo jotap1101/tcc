@@ -56,8 +56,7 @@ def patch_id(tile_id: str, row: int, col: int) -> str:
 
 def patch_bbox(transform: Any, row: int, col: int, patch_size: int) -> str:
     """Bounding box geográfica (minx,miny,maxx,maxy) de um patch no CRS do tile."""
-    from rasterio.transform import window_bounds
-    from rasterio.windows import Window
+    from rasterio.windows import Window, window_bounds
 
     west, south, east, north = window_bounds(
         Window(col, row, patch_size, patch_size), transform
