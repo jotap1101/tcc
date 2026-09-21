@@ -173,6 +173,15 @@ class DriveClient:
         """Indica se um arquivo remoto existe no caminho exato (pasta + nome)."""
         return self._file_id(remote_path) is not None
 
+    def size(self, remote_path: str) -> int | None:
+        """Retorna o tamanho em bytes de um arquivo remoto, ou None se ausente."""
+        file_id = self._file_id(remote_path)
+        if file_id is None:
+            return None
+        res = self._build_service().files().get(fileId=file_id, fields="size").execute()
+        size = res.get("size")
+        return int(size) if size is not None else None
+
     def move(self, remote_src: str, remote_dst: str) -> None:
         """Move um arquivo remoto para outro caminho no Drive (muda a pasta pai)."""
         service = self._build_service()

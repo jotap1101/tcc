@@ -138,7 +138,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 ### Phase 3 — Preprocessing & Dataset
 
 - [x] `05_preprocessing.ipynb`
-- [ ] `06_patch_generation.ipynb`
+- [x] `06_patch_generation.ipynb`
 - [ ] `07_spatial_kfold_split.ipynb`
 - [ ] `08_dataset_eda.ipynb`
 
@@ -165,7 +165,8 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 ### Shared package (`src/`) — built alongside the phases
 
 - [x] `config.py` + `config.yaml`
-- [ ] `data/dataset.py`, `data/augmentations.py`, `data/manifest.py`
+- [ ] `data/dataset.py`, `data/augmentations.py`
+- [x] `data/patch_generation.py` (patches 512x512 + manifesto Parquet — estágio 06)
 - [x] `data/mask_utils.py` (uma função por fonte de ground truth), `data/gee_client.py`
 - [x] `data/mask_comparison.py` (diagnóstico comparativo das fontes — estágio 03)
 - [x] `data/mask_finalization.py` (finalização da máscara — estágio 04)
