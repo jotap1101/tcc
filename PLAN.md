@@ -137,7 +137,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 ### Phase 3 — Preprocessing & Dataset
 
-- [ ] `05_preprocessing.ipynb`
+- [x] `05_preprocessing.ipynb`
 - [ ] `06_patch_generation.ipynb`
 - [ ] `07_spatial_kfold_split.ipynb`
 - [ ] `08_dataset_eda.ipynb`
@@ -169,6 +169,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 - [x] `data/mask_utils.py` (uma função por fonte de ground truth), `data/gee_client.py`
 - [x] `data/mask_comparison.py` (diagnóstico comparativo das fontes — estágio 03)
 - [x] `data/mask_finalization.py` (finalização da máscara — estágio 04)
+- [x] `data/preprocessing.py` (alinhamento e normalização do composite — estágio 05)
 - [ ] `losses.py` (Dice + Focal + Boundary)
 - [ ] `metrics.py` (IoU, F1, Precision, Recall)
 - [ ] `trainer.py` (protocolo de treino único, parametrizado pelo modelo — sem duplicação entre notebooks 09/10)

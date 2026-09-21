@@ -70,6 +70,25 @@ def test_persist_bytes_local(tmp_path, monkeypatch) -> None:
     assert target.read_bytes() == b"\x89PNG"
 
 
+def test_persist_file_local(tmp_path, monkeypatch) -> None:
+    """No modo local, persist_file copia o arquivo para o caminho canônico."""
+    monkeypatch.setattr(io, "detect_platform", lambda: "local")
+    source = tmp_path / "composite.tif"
+    source.write_bytes(b"composite")
+    target = tmp_path / "tcc" / "data" / "processed" / "composites" / "composite.tif"
+    io.persist_file(source, target)
+    assert target.read_bytes() == b"composite"
+
+
+def test_persist_file_local_same_path_noop(tmp_path, monkeypatch) -> None:
+    """No modo local, persist_file no próprio caminho é um no-op (sem duplicação)."""
+    monkeypatch.setattr(io, "detect_platform", lambda: "local")
+    path = tmp_path / "composite.tif"
+    path.write_bytes(b"composite")
+    io.persist_file(path, path)
+    assert path.read_bytes() == b"composite"
+
+
 def test_ensure_local_copy_returns_path_on_local(tmp_path, monkeypatch) -> None:
     """No modo local, ensure_local_copy deve retornar o próprio caminho."""
     monkeypatch.setattr(io, "detect_platform", lambda: "local")

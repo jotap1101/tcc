@@ -11,7 +11,6 @@ import json
 import os
 import shutil
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
@@ -113,7 +112,14 @@ class DriveClient:
             parent = created["id"]
 
     def upload(self, local_path: Path, remote_path: str) -> None:
-        """Faz upload de um arquivo local para um caminho remoto no Drive."""
+        """Faz upload de um arquivo local para um caminho remoto no Drive.
+
+        Usa upload resumível em blocos (MediaFileUpload) para arquivos grandes,
+        como o composite normalizado do estágio 05 — mais robusto que um upload
+        simples em uma única requisição.
+        """
+        from googleapiclient.http import DEFAULT_CHUNK_SIZE, MediaFileUpload
+
         service = self._build_service()
         parts = remote_path.split("/")
         parent = "root"
@@ -125,7 +131,10 @@ class DriveClient:
                 raise FileNotFoundError(f"Pasta ausente no Drive: {part}")
             parent = folder_id
         metadata = {"name": parts[-1], "parents": [parent]}
-        service.files().create(body=metadata, media_body=str(local_path)).execute()
+        media = MediaFileUpload(
+            str(local_path), resumable=True, chunksize=DEFAULT_CHUNK_SIZE
+        )
+        service.files().create(body=metadata, media_body=media, fields="id").execute()
 
     def download(self, remote_path: str, local_path: Path) -> None:
         """Faz download de um arquivo remoto do Drive para um caminho local."""
@@ -231,6 +240,24 @@ def persist_bytes(path: Path, data: bytes) -> None:
     path.write_bytes(data)
     if detect_platform() == "kaggle":
         get_drive_client().upload(path, str(path.relative_to(mount_drive())))
+
+
+def persist_file(local_path: Path, target_path: Path) -> None:
+    """Persiste um arquivo local em um caminho do Drive canônico.
+
+    No Colab/local o caminho canônico já é o real (Drive montado ou raiz local),
+    então basta copiar o arquivo quando os caminhos diferem. No Kaggle o arquivo
+    local é enviado via Drive API com upload resumível (streaming), adequado para
+    arquivos grandes como o composite normalizado.
+    """
+    if detect_platform() == "kaggle":
+        get_drive_client().upload(
+            local_path, str(target_path.relative_to(mount_drive()))
+        )
+        return
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    if local_path.resolve() != target_path.resolve():
+        shutil.copy2(str(local_path), str(target_path))
 
 
 def relocate_exported_file(
