@@ -55,13 +55,16 @@ def patch_id(tile_id: str, row: int, col: int) -> str:
 
 
 def patch_bbox(transform: Any, row: int, col: int, patch_size: int) -> str:
-    """Bounding box geográfica (minx,miny,maxx,maxy) de um patch no CRS do tile."""
-    from rasterio.windows import Window, window_bounds
+    """Bounding box geográfica (minx,miny,maxx,maxy) de um patch no CRS do tile.
 
-    west, south, east, north = window_bounds(
-        Window(col, row, patch_size, patch_size), transform
-    )
-    return f"{west:.2f},{south:.2f},{east:.2f},{north:.2f}"
+    Calculada diretamente da transformação afim (atributos a..f), sem depender
+    de helpers de janela do rasterio — compatível com qualquer versão.
+    """
+    left = transform.c + transform.a * col + transform.b * row
+    top = transform.f + transform.d * col + transform.e * row
+    right = transform.c + transform.a * (col + patch_size) + transform.b * (row + patch_size)
+    bottom = transform.f + transform.d * (col + patch_size) + transform.e * (row + patch_size)
+    return f"{left:.2f},{bottom:.2f},{right:.2f},{top:.2f}"
 
 
 def grid_dims(height: int, width: int, patch_size: int) -> tuple[int, int]:

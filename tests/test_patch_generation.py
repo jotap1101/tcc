@@ -12,6 +12,7 @@ from src.data.patch_generation import (
     grid_dims,
     image_patches_dir,
     manifest_path,
+    patch_bbox,
     patch_fingerprint_hash,
     patch_id,
     patch_montage_file_name,
@@ -105,6 +106,16 @@ def test_manifest_path_points_to_processed(tmp_path) -> None:
 def test_patch_id_is_deterministic() -> None:
     """O identificador do patch deve ser determinístico e conter linha e coluna."""
     assert patch_id("tile_310044_2023", 3, 7) == "tile_310044_2023_r0003_c0007"
+
+
+def test_patch_bbox_derived_from_affine() -> None:
+    """A bbox geográfica deve derivar da transformação afim (independente de versão)."""
+    from rasterio.transform import Affine
+
+    transform = Affine(10.0, 0.0, 300000.0, 0.0, -10.0, 7780000.0)
+    assert patch_bbox(transform, row=1, col=2, patch_size=2) == (
+        "300020.00,7779970.00,300040.00,7779990.00"
+    )
 
 
 def test_grid_dims_drops_partial_edges() -> None:
