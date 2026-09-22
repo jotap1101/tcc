@@ -139,7 +139,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 - [x] `05_preprocessing.ipynb`
 - [x] `06_patch_generation.ipynb`
-- [ ] `07_spatial_kfold_split.ipynb`
+- [x] `07_spatial_kfold_split.ipynb` — divisão espacial k-fold (KMeans determinístico sobre centroides) gravada na coluna `fold` do manifesto, com `split.meta.json` para idempotência
 - [ ] `08_dataset_eda.ipynb`
 
 ### Phase 4 — Training
@@ -171,6 +171,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 - [x] `data/mask_comparison.py` (diagnóstico comparativo das fontes — estágio 03)
 - [x] `data/mask_finalization.py` (finalização da máscara — estágio 04)
 - [x] `data/preprocessing.py` (alinhamento e normalização do composite — estágio 05)
+- [x] `data/spatial_split.py` (divisão espacial k-fold do manifesto — estágio 07)
 - [ ] `losses.py` (Dice + Focal + Boundary)
 - [ ] `metrics.py` (IoU, F1, Precision, Recall)
 - [ ] `trainer.py` (protocolo de treino único, parametrizado pelo modelo — sem duplicação entre notebooks 09/10)

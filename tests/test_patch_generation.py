@@ -1,6 +1,7 @@
 """Testes de src/data/patch_generation.py (patches 512x512 + manifesto)."""
 
 import copy
+from pathlib import Path
 
 import numpy as np
 import pytest
