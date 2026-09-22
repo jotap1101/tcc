@@ -112,7 +112,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 - **`config.yaml`**: `aoi` (region code `310044`, `vector_source` `ibge_mesh`, `mesh_path` apontando para `data/external/ibge/mg_rg_immediatas_2025/`), `data` (`collection`, `dates`, `bands`, `patch_size`, `coffee_min_ratio`, `cloud_threshold`), `splits.fold_count`, `reproducibility.seed`, `model` (`unet_channels`, `segformer_variant`), `loss` weights, `training` (`lr`, `epochs`, `batch_size`). A `storage` block maps the Drive `tcc/` root and every subfolder (`data`, `models`, `artifacts`, `repo`, `secrets`, ...) — all paths are resolved from here, never hardcoded. A `ground_truth.sources` block lists every source with its output subfolder.
 - **`manifest.parquet` columns**: `patch_id`, `tile_id`, `fold`, `row`, `col`, `bbox`, `coffee_ratio`, `mask_source`, `image_path`, `mask_path`.
-- **Artifacts** (all under the Drive `tcc/` root, paths resolved from `config.yaml`): `MyDrive/tcc/artifacts/metrics/{model}/fold_{i}.json`, `MyDrive/tcc/artifacts/figures/`, `MyDrive/tcc/models/{model}/fold_{i}.pt`, and `MyDrive/tcc/data/processed/manifest.parquet`.
+- **Artifacts** (all under the Drive `tcc/` root, paths resolved from `config.yaml`): `MyDrive/tcc/artifacts/metrics/{model}/fold_{i}.json`, `MyDrive/tcc/artifacts/figures/`, `MyDrive/tcc/models/{model}/fold_{i}.pt`, `MyDrive/tcc/data/processed/manifest.parquet`, and `MyDrive/tcc/data/processed/normalization_stats.json` (estatísticas de normalização por banda — estágio 08).
 
 ## 7. Progress tracker
 
@@ -140,7 +140,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 - [x] `05_preprocessing.ipynb`
 - [x] `06_patch_generation.ipynb`
 - [x] `07_spatial_kfold_split.ipynb` — divisão espacial k-fold (k-means determinístico em numpy puro sobre centroides) gravada na coluna `fold` do manifesto, com `split.meta.json` para idempotência
-- [ ] `08_dataset_eda.ipynb`
+- [x] `08_dataset_eda.ipynb` — estatísticas de normalização por banda (média, desvio, fração de NaN) persistidas em `normalization_stats.json` com fingerprint, verificações de sanidade e figura de resumo
 
 ### Phase 4 — Training
 
@@ -172,6 +172,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 - [x] `data/mask_finalization.py` (finalização da máscara — estágio 04)
 - [x] `data/preprocessing.py` (alinhamento e normalização do composite — estágio 05)
 - [x] `data/spatial_split.py` (divisão espacial k-fold do manifesto — estágio 07)
+- [x] `data/eda.py` (estatísticas de normalização + sanidade do dataset — estágio 08)
 - [ ] `losses.py` (Dice + Focal + Boundary)
 - [ ] `metrics.py` (IoU, F1, Precision, Recall)
 - [ ] `trainer.py` (protocolo de treino único, parametrizado pelo modelo — sem duplicação entre notebooks 09/10)
