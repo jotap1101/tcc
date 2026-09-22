@@ -130,9 +130,7 @@ def compute_normalization_stats(
 
     for record in manifest.itertuples():
         image = np.load(
-            io.ensure_local_copy(
-                resolve_from_root(str(record.image_path), storage_paths)
-            )
+            io.ensure_local_copy(resolve_from_root(str(record.image_path), storage_paths))
         ).reshape(n_bands, -1)
         finite = np.isfinite(image)
         total_counts += image.shape[1]
@@ -197,14 +195,10 @@ def run_sanity_checks(
     nan_pixels = 0
     for record in sample.itertuples():
         image = np.load(
-            io.ensure_local_copy(
-                resolve_from_root(str(record.image_path), storage_paths)
-            )
+            io.ensure_local_copy(resolve_from_root(str(record.image_path), storage_paths))
         )
         mask = np.load(
-            io.ensure_local_copy(
-                resolve_from_root(str(record.mask_path), storage_paths)
-            )
+            io.ensure_local_copy(resolve_from_root(str(record.mask_path), storage_paths))
         )
         if image.shape != expected_shape:
             shape_issues.append(f"{record.patch_id}: {image.shape}")
@@ -330,9 +324,7 @@ def render_eda_figure(
         values: list[np.ndarray] = []
         for record in sample.itertuples():
             image = np.load(
-                io.ensure_local_copy(
-                    resolve_from_root(str(record.image_path), storage_paths)
-                )
+                io.ensure_local_copy(resolve_from_root(str(record.image_path), storage_paths))
             )
             band_values = image[index]
             values.append(band_values[np.isfinite(band_values)])

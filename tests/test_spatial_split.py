@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -143,9 +144,7 @@ def test_assign_spatial_folds_requires_manifest(tmp_path, monkeypatch) -> None:
         assign_spatial_folds(paths)
 
 
-def test_assign_spatial_folds_recomputes_on_config_change(
-    tmp_path, monkeypatch
-) -> None:
+def test_assign_spatial_folds_recomputes_on_config_change(tmp_path, monkeypatch) -> None:
     """Mudanças na configuração de dobras devem recomputar e reutilizar depois."""
     import pandas as pd
 

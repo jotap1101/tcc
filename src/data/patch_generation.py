@@ -116,9 +116,7 @@ def manifest_fingerprint(storage_paths: dict[str, Path]) -> dict[str, Any]:
 
 def _canonical_fingerprint_blob(storage_paths: dict[str, Path]) -> str:
     """Blob canônico (ordenado) do fingerprint, base do hash de versionamento."""
-    return json.dumps(
-        manifest_fingerprint(storage_paths), sort_keys=True, ensure_ascii=False
-    )
+    return json.dumps(manifest_fingerprint(storage_paths), sort_keys=True, ensure_ascii=False)
 
 
 def patch_fingerprint_hash(storage_paths: dict[str, Path]) -> str:
@@ -154,9 +152,7 @@ def _require_dependency(label: str, path: Path, storage_paths: dict[str, Path]) 
 def _check_same_grid(composite: Any, mask: Any) -> None:
     """Valida que composite e máscara compartilham o mesmo grid (pixel a pixel)."""
     if not _same_grid(composite, mask):
-        raise ValueError(
-            "Composite e máscara final em grids distintos; reexecute o estágio 05."
-        )
+        raise ValueError("Composite e máscara final em grids distintos; reexecute o estágio 05.")
 
 
 def _ensure_remote_dirs(dirs: list[Path]) -> None:
@@ -191,9 +187,7 @@ def _write_manifest(
     io.persist_file(path, path)
 
 
-def _write_metadata(
-    path: Path, payload: dict[str, Any], storage_paths: dict[str, Path]
-) -> None:
+def _write_metadata(path: Path, payload: dict[str, Any], storage_paths: dict[str, Path]) -> None:
     """Persiste o metadata (fingerprint) do manifesto no Drive canônico."""
     from src import io
 
@@ -247,9 +241,7 @@ def generate_patches(storage_paths: dict[str, Path]) -> Path:
         _check_same_grid(comp, m)
         rows, cols = grid_dims(int(m.height), int(m.width), patch_size)
         if rows == 0 or cols == 0:
-            raise ValueError(
-                f"Raster menor que um patch ({patch_size}px); ajuste data.patch_size."
-            )
+            raise ValueError(f"Raster menor que um patch ({patch_size}px); ajuste data.patch_size.")
         for row in range(rows):
             for col in range(cols):
                 window = Window(col * patch_size, row * patch_size, patch_size, patch_size)
@@ -365,15 +357,11 @@ def render_patch_montage(manifest: pd.DataFrame, storage_paths: dict[str, Path])
     axes = np.atleast_2d(axes)
     for row, (_, record) in enumerate(manifest.iterrows()):
         image = np.load(
-            io.ensure_local_copy(
-                resolve_from_root(str(record["image_path"]), storage_paths)
-            )
+            io.ensure_local_copy(resolve_from_root(str(record["image_path"]), storage_paths))
         )
         mask = (
             np.load(
-                io.ensure_local_copy(
-                    resolve_from_root(str(record["mask_path"]), storage_paths)
-                )
+                io.ensure_local_copy(resolve_from_root(str(record["mask_path"]), storage_paths))
             )
             > 0
         )

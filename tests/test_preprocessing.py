@@ -105,7 +105,7 @@ def test_composite_path_points_to_processed_composites(tmp_path) -> None:
 
 def test_normalize_reflectance_scales_and_clips() -> None:
     """A normalização deve aplicar a escala 1e-4 e saturar em [0, 1]."""
-    values = np.array([0, 5000, 10000, 20000, -1000], dtype=np.uint16)
+    values = np.array([0, 5000, 10000, 20000, -1000], dtype=np.int64)
     normalized = normalize_reflectance(values)
     assert normalized.dtype == np.float32
     assert normalized.tolist() == [0.0, 0.5, 1.0, 1.0, 0.0]
@@ -134,9 +134,7 @@ def test_load_aligned_mosaic_different_grid(tmp_path, monkeypatch) -> None:
     composite = load_aligned_mosaic(mosaic, mask)
     assert composite.aligned is False
     assert composite.array.shape == (4, 4, 4)
-    np.testing.assert_allclose(
-        composite.profile["transform"].to_gdal(), _mask_transform(mask)
-    )
+    np.testing.assert_allclose(composite.profile["transform"].to_gdal(), _mask_transform(mask))
 
 
 def test_build_preprocessed_composite_idempotent(tmp_path, monkeypatch) -> None:

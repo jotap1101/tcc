@@ -15,8 +15,8 @@ Guide the sequential, modular implementation of the full pipeline — from Googl
 - **Manifest-driven data**: `manifest.parquet` registers every patch (`patch_id`, `tile_id`, `fold`, bbox, `coffee_ratio`, `mask_source`, paths). It is the backbone of reproducibility.
 - **Identical training protocol** across models: same split, loss, optimizer, scheduler, metrics and seed — only the architecture differs. This guarantees a scientifically fair comparison.
 - **Platform-agnostic notebooks**: every notebook runs **correctly** on **Google Colab and Kaggle**, executing the same protocol (same code, seeds, config and processing). All environment detection, Drive mounting and path resolution is abstracted in `src/` — notebooks never use platform-specific paths or APIs.
-- **Storage abstraction (`src/io.py`)**: the single contract for platform detection, Drive mounting and path resolution. Exposes at least `detect_platform()`, `mount_drive()` (Colab nativo; Kaggle via Drive API com cache local), `ensure_storage_root()` (idempotent — creates `MyDrive/tcc/` and every required subfolder recursively when absent, no-op when present), `resolve_storage_paths()` (built from `config.yaml`) e `sync_repo_to_workspace()` (entrega do `src/` ao runtime). Notebooks consume only this module.
-- **`src/` delivery to the runtime**: notebook `00` calls `sync_repo_to_workspace()` — if `MyDrive/tcc/repo/src/` exists it copies the mirror; otherwise (first run) it downloads the public repo and **creates the mirror in the Drive itself**. No manual upload or cloning setup.
+- **Storage abstraction (`src/io.py`)**: the single contract for platform detection, Drive mounting and path resolution. Exposes at least `detect_platform()`, `mount_drive()` (Colab nativo; Kaggle via Drive API com cache local), `ensure_storage_root()` (idempotent — creates `MyDrive/tcc/` and every required subfolder recursively when absent, no-op when present), `resolve_storage_paths()` (built from `config.yaml`) e `sync_repo_to_workspace()` (cópia do espelho `MyDrive/tcc/repo/` para o workspace quando ele já existe). Notebooks consume only this module.
+- **`src/` delivery to the runtime**: the first cell of every notebook downloads and executes `src/bootstrap.py` (stdlib-only) from the public repository — it extracts `src/`, `data/external/` and `requirements-runtime.txt` into the workspace, adds the workspace to `sys.path` and, on Colab, seeds the `MyDrive/tcc/repo/` mirror (idempotent). `src/io.py`'s `sync_repo_to_workspace()` copies from the mirror when it already exists. No manual upload or cloning setup.
 - **Idempotent, re-runnable pipeline**: re-running a notebook is safe — it opens/creates the `tcc/` tree and never silently overwrites versioned artifacts; new runs write `run_id`-versioned outputs (metrics, checkpoints, logs) or confirm overwrites explicitly.
 - **Platform-specific dependencies**: libraries tied to a host (e.g., `google.colab` Drive mount, Kaggle secrets) are installed inside notebook `00` at runtime — they are **not** added to `pyproject.toml`/`uv.lock`, keeping the repository environment-agnostic.
 - **Canonical storage on Google Drive**: the `tcc/` folder at the **root of Google Drive** (`MyDrive/tcc/`) is the single storage root for every datum, model, metric, figure and log. Notebooks access it if it already exists, or create it (and any required subfolder) otherwise — the notebooks themselves generate the folder structure.
@@ -118,7 +118,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 ### Phase 0 — Setup
 
-- [x] `00_setup_environment.ipynb` — platform detection, Drive mount + `tcc/` root resolution, `src/` delivery (`sync_repo_to_workspace()`, com bootstrap automático quando o espelho não existe), dependency install (`requirements-runtime.txt`), GEE authentication (executed inside notebook cells), seeds + deterministic flags, config load, environment self-check
+- [x] `00_setup_environment.ipynb` — platform detection, Drive mount + `tcc/` root resolution, `src/` delivery (primeira célula baixa e executa `src/bootstrap.py`: extrai `src/`, `data/external/` e `requirements-runtime.txt`, adiciona o workspace ao `sys.path` e cria o espelho `MyDrive/tcc/repo/` no Colab), dependency install (`requirements-runtime.txt`), GEE authentication (executed inside notebook cells), seeds + deterministic flags, config load, environment self-check
 - [x] `src/io.py` (platform detection, Drive mount, `tcc/` root ensure/resolve, `src/` delivery) + unit tests
 - [x] `pyproject.toml` (uv, ruff, mypy, pytest)
 - [x] `requirements-runtime.txt` (versões pinadas instaladas pelo notebook 00)
@@ -178,7 +178,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 - [ ] `trainer.py` (protocolo de treino único, parametrizado pelo modelo — sem duplicação entre notebooks 09/10)
 - [ ] `models/unet.py`, `models/segformer.py`
 - [ ] `xai/gradcam.py`, `xai/attention_rollout.py`
-- [x] `io.py` (platform detection + Drive mount + `tcc/` root ensure/resolve + `src/` delivery), `utils.py`
+- [x] `io.py` (platform detection + Drive mount + `tcc/` root ensure/resolve + `src/` delivery via espelho), `bootstrap.py` (entrega do `src/` ao runtime antes do import), `utils.py`
 - [x] `tests/` (config, io, utils — pytest)
 
 ## 8. Reproducibility checklist

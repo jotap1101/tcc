@@ -80,7 +80,7 @@ Research project (deep learning / computer vision) on **semantic segmentation of
 
 - The canonical artifact tree lives inside the Drive `tcc/` root (see "Platform Agnosticism & Storage"): `tcc/data/{raw,interim,processed,external}`, `tcc/models/`, `tcc/artifacts/`, and any deeper subfolders the pipeline needs. Notebooks create this tree on demand.
 - Local `data/`, `models/` and `artifacts/` are git-ignored and, at most, mirror the Drive tree — the Drive `tcc/` root is authoritative. Exception: `data/external/` holds small immutable reference inputs (e.g., the IBGE mesh) and **is versioned** in the repo.
-- **Versioned reference data**: reference inputs (e.g., `data/external/ibge/mg_rg_immediatas_2025/`) are tracked in git and delivered to the runtime alongside `src/` by `sync_repo_to_workspace()`; `data/{raw,interim,processed}` remain git-ignored mirrors of the Drive.
+- **Versioned reference data**: reference inputs (e.g., `data/external/ibge/mg_rg_immediatas_2025/`) are tracked in git and delivered to the runtime alongside `src/` by the workspace bootstrap (`src/bootstrap.py`, executed in the first cell of every notebook); `data/{raw,interim,processed}` remain git-ignored mirrors of the Drive.
 - **Ground truth by source**: each ground-truth source (MapBiomas, AlphaEarth, S2DR, and any future source) is integrated in its **own dedicated code cell** and stored in its **own subfolder** under `MyDrive/tcc/data/{raw,interim}/<source>/`; adding a source means adding a cell, never modifying another source's logic.
 - Notebook naming: `NN_verb_snake_case.ipynb` inside `notebooks/`, executed in numeric order.
 
@@ -101,9 +101,8 @@ Use the available MCP servers actively for repository inspection, architectural 
 
 ## Execution Environment (critical)
 
-- Code is **generated in this local environment**, but is **never executed or tested locally**. Do **not install any library** in the project context or globally — even for testing.
-- The code will be **executed on Google Colab or Kaggle** (Kaggle is mandatory). Notebooks must therefore be **platform-agnostic**: the same `.ipynb` runs correctly on either platform and is worked the same way (same protocol, seeds, versions and processing) — not bit-identical outputs across different hardware.
-- **Linting, type checking and tests run on CI (GitHub Actions)** on push — no local installation required.
+- Notebook and training code is **generated in this local environment**, but **executed on Google Colab or Kaggle** (Kaggle is mandatory). Notebooks must therefore be **platform-agnostic**: the same `.ipynb` runs correctly on either platform and is worked the same way (same protocol, seeds, versions and processing) — not bit-identical outputs across different hardware.
+- The repository `.venv` holds the project and development dependencies and is used to **validate the CI quality gates locally** (ruff, mypy, pytest and notebook-conventions). CI (GitHub Actions) runs the same gates on push.
 
 ## Platform Agnosticism & Storage (critical)
 
@@ -111,7 +110,7 @@ Use the available MCP servers actively for repository inspection, architectural 
 
 - **Rule:** every notebook must run **correctly** on **Google Colab** and **Kaggle**, executing the same protocol (same code, seeds, config and processing) — results are worked identically, not required to be bit-identical across platforms. No platform-specific APIs, magic commands, hardcoded paths, or environment-dependent logic in notebooks.
 - All platform detection, Drive mounting, and path resolution is centralized in `src/` (e.g., `io.py`, `config.py`) — the **only** place environment specifics live. Notebooks consume that abstraction only.
-- **`src/` + reference data delivery to the runtime**: notebook `00` calls `sync_repo_to_workspace()` in `src/io.py` — it copies `MyDrive/tcc/repo/src/` (and `data/external/`, when present) into the workspace when the mirror exists, or **bootstraps it when it does not** (first run): it downloads the public repository (`github.com/jotap1101/tcc`) and writes them into `MyDrive/tcc/repo/`, creating the mirror itself. The workspace is added to `sys.path`; no manual upload is required.
+- **`src/` + reference data delivery to the runtime**: the first cell of every notebook downloads and executes `src/bootstrap.py` (stdlib-only) from the public repository (`github.com/jotap1101/tcc`) — necessary because `src/` is not importable yet. The bootstrap downloads the repo tarball, extracts `src/`, `data/external/` and `requirements-runtime.txt` into the workspace, adds the workspace to `sys.path` and, on Colab, seeds the `MyDrive/tcc/repo/` mirror (idempotent). `src/io.py` still exposes `sync_repo_to_workspace()`, which copies the mirror to the workspace when it already exists. No manual upload or cloning setup is required.
 - **Drive on Kaggle**: Kaggle has no native Drive mount; `src/io.py` accesses Drive via the Google Drive API (OAuth token of the primary account from `GDRIVE_TOKEN`/`GDRIVE_TOKEN_FILE`) with a local cache under `/kaggle/working/drive`. Notebook code stays uniform — a single `mount_drive()` / `ensure_storage_root()` call.
 - Notebooks must be deterministic and platform-consistent: same seeds, same config, same protocol on both platforms; determinism refers to the protocol, not bit-identical outputs across different hardware.
 

@@ -69,11 +69,7 @@ def _read_on_reference_grid(
     from rasterio.warp import reproject
 
     with rasterio.open(path) as src:
-        if (
-            (src.height, src.width) == shape
-            and src.transform == transform
-            and src.crs == crs
-        ):
+        if (src.height, src.width) == shape and src.transform == transform and src.crs == crs:
             return src.read(1) > 0
         destination = np.zeros(shape, dtype=np.uint8)
         reproject(
@@ -141,9 +137,7 @@ def compute_comparison(mask_set: MaskSet, reference: str) -> dict[str, Any]:
                 "f1": _safe_ratio(2 * both, 2 * both + only_reference + only_other),
                 "precision": _safe_ratio(both, both + only_reference),
                 "recall": _safe_ratio(both, both + only_other),
-                "kappa": _cohen_kappa(
-                    both, only_reference, only_other, neither, total
-                ),
+                "kappa": _cohen_kappa(both, only_reference, only_other, neither, total),
             },
         }
     return result
@@ -207,17 +201,13 @@ def render_comparison_figure(mask_set: MaskSet, reference: str) -> bytes:
 
     reference_mask = display_array(mask_set.masks[reference])
     other_mask = display_array(mask_set.masks[other])
-    agreement = display_array(
-        agreement_labels(mask_set.masks[reference], mask_set.masks[other])
-    )
+    agreement = display_array(agreement_labels(mask_set.masks[reference], mask_set.masks[other]))
 
     figure, axes = plt.subplots(1, 3, figsize=(16, 6))
     _plot_mask(axes[0], reference_mask, reference)
     _plot_mask(axes[1], other_mask, other)
     _plot_agreement(axes[2], agreement, reference, other)
-    figure.suptitle(
-        "Comparação das máscaras de café por fonte de ground truth", fontsize=13
-    )
+    figure.suptitle("Comparação das máscaras de café por fonte de ground truth", fontsize=13)
     figure.tight_layout(rect=(0, 0, 1, 0.94))
 
     buffer = stdlib_io.BytesIO()
@@ -226,9 +216,7 @@ def render_comparison_figure(mask_set: MaskSet, reference: str) -> bytes:
     return buffer.getvalue()
 
 
-def agreement_labels(
-    reference_mask: np.ndarray, other_mask: np.ndarray
-) -> np.ndarray:
+def agreement_labels(reference_mask: np.ndarray, other_mask: np.ndarray) -> np.ndarray:
     """Mapa de concordância rotulado: 0 nenhum, 1 ambos, 2 só referência, 3 só outra."""
     combined = 2 * reference_mask.astype(np.uint8) + other_mask.astype(np.uint8)
     labels = np.zeros(combined.shape, dtype=np.uint8)
@@ -260,9 +248,7 @@ def _plot_mask(axis: Any, mask: np.ndarray, title: str) -> None:
     axis.set_yticks([])
 
 
-def _plot_agreement(
-    axis: Any, labels: np.ndarray, reference: str, other: str
-) -> None:
+def _plot_agreement(axis: Any, labels: np.ndarray, reference: str, other: str) -> None:
     """Exibe o mapa de concordância com as quatro classes e a legenda."""
     from matplotlib.colors import ListedColormap
     from matplotlib.patches import Patch

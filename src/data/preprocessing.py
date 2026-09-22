@@ -59,9 +59,7 @@ def composite_path(storage_paths: dict[str, Path]) -> Path:
     return storage_paths["data_processed_composites"] / f"{composite_file_name()}.tif"
 
 
-def load_aligned_mosaic(
-    mosaic_path: Path, mask_path: Path
-) -> AlignedComposite:
+def load_aligned_mosaic(mosaic_path: Path, mask_path: Path) -> AlignedComposite:
     """Carrega o mosaico no grid da máscara de referência, reamostrando se preciso.
 
     Quando os grids coincidem (mesma CRS, transform e dimensões) os valores são
@@ -95,6 +93,7 @@ def _same_grid(mosaic: Any, mask: Any) -> bool:
 
 def _reproject_to_grid(mosaic: Any, mask: Any) -> np.ndarray:
     """Reamostra todas as bandas do mosaico para o grid da máscara."""
+    import rasterio
     from rasterio.enums import Resampling
     from rasterio.warp import reproject
 
@@ -165,13 +164,9 @@ def build_preprocessed_composite(storage_paths: dict[str, Path]) -> Path:
     mosaic_local = io.ensure_local_copy(mosaic_path(storage_paths))
     mask_local = io.ensure_local_copy(final_mask_path(storage_paths))
     if not mosaic_local.is_file():
-        raise FileNotFoundError(
-            f"Mosaico do estágio 01 não encontrado: {mosaic_local}"
-        )
+        raise FileNotFoundError(f"Mosaico do estágio 01 não encontrado: {mosaic_local}")
     if not mask_local.is_file():
-        raise FileNotFoundError(
-            f"Máscara final do estágio 04 não encontrada: {mask_local}"
-        )
+        raise FileNotFoundError(f"Máscara final do estágio 04 não encontrada: {mask_local}")
 
     composite = load_aligned_mosaic(mosaic_local, mask_local)
     normalized = normalize_reflectance(composite.array)
@@ -184,9 +179,7 @@ def build_preprocessed_composite(storage_paths: dict[str, Path]) -> Path:
     return target_path
 
 
-def _write_composite(
-    path: Path, array: np.ndarray, profile: dict[str, Any]
-) -> None:
+def _write_composite(path: Path, array: np.ndarray, profile: dict[str, Any]) -> None:
     """Escreve o composite normalizado em GeoTIFF com o perfil da máscara."""
     import rasterio
 
@@ -216,10 +209,9 @@ def verify_composite(storage_paths: dict[str, Path]) -> dict[str, Any]:
         )
         array = composite.read()
         finite = array[np.isfinite(array)]
-        if finite.size:
-            value_range = [float(finite.min()), float(finite.max())]
-        else:
-            value_range = [None, None]
+        value_range: list[float | None] = (
+            [float(finite.min()), float(finite.max())] if finite.size else [None, None]
+        )
     return {
         "shape": list(shape),
         "crs": crs,
@@ -266,9 +258,7 @@ def render_composite_preview(composite_path: Path) -> bytes:
     green = _percentile_stretch(data[band_index["B3"]])
     blue = _percentile_stretch(data[band_index["B2"]])
     # Reduz cada banda (2D) antes de compor o RGB (display_array exige arrays 2D).
-    rgb = np.stack(
-        [display_array(red), display_array(green), display_array(blue)], axis=-1
-    )
+    rgb = np.stack([display_array(red), display_array(green), display_array(blue)], axis=-1)
 
     figure, axis = plt.subplots(figsize=(8, 8))
     axis.imshow(rgb)
@@ -283,9 +273,7 @@ def render_composite_preview(composite_path: Path) -> bytes:
     return buffer.getvalue()
 
 
-def _percentile_stretch(
-    band: np.ndarray, low: int = 2, high: int = 98
-) -> np.ndarray:
+def _percentile_stretch(band: np.ndarray, low: int = 2, high: int = 98) -> np.ndarray:
     """Realça uma banda contínua pelo estiramento de percentis para [0, 255]."""
     finite = band[np.isfinite(band)]
     if finite.size == 0:

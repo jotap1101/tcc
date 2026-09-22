@@ -15,10 +15,7 @@ def test_reference_year_derives_from_data_dates() -> None:
 
 def test_mask_file_name_stable() -> None:
     """O nome da máscara deve derivar da fonte, região e ano."""
-    assert (
-        mask_utils.mask_file_name("mapbiomas", "310044", 2023)
-        == "mask_mapbiomas_310044_2023"
-    )
+    assert mask_utils.mask_file_name("mapbiomas", "310044", 2023) == "mask_mapbiomas_310044_2023"
 
 
 def test_ground_truth_sources_have_required_config() -> None:

@@ -131,9 +131,7 @@ class DriveClient:
                 raise FileNotFoundError(f"Pasta ausente no Drive: {part}")
             parent = folder_id
         metadata = {"name": parts[-1], "parents": [parent]}
-        media = MediaFileUpload(
-            str(local_path), resumable=True, chunksize=DEFAULT_CHUNK_SIZE
-        )
+        media = MediaFileUpload(str(local_path), resumable=True, chunksize=DEFAULT_CHUNK_SIZE)
         service.files().create(body=metadata, media_body=media, fields="id").execute()
 
     def download(self, remote_path: str, local_path: Path) -> None:
@@ -260,9 +258,7 @@ def persist_file(local_path: Path, target_path: Path) -> None:
     arquivos grandes como o composite normalizado.
     """
     if detect_platform() == "kaggle":
-        get_drive_client().upload(
-            local_path, str(target_path.relative_to(mount_drive()))
-        )
+        get_drive_client().upload(local_path, str(target_path.relative_to(mount_drive())))
         return
     target_path.parent.mkdir(parents=True, exist_ok=True)
     if local_path.resolve() != target_path.resolve():

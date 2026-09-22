@@ -101,9 +101,7 @@ def test_normalization_stats_path_points_to_processed(tmp_path) -> None:
     assert target.suffix == ".json"
 
 
-def test_compute_normalization_stats_consistent_with_arrays(
-    tmp_path, monkeypatch
-) -> None:
+def test_compute_normalization_stats_consistent_with_arrays(tmp_path, monkeypatch) -> None:
     """As estatísticas devem reproduzir média/desvio calculados sobre os arrays."""
     paths = _write_manifest_with_patches(tmp_path, monkeypatch)
     stats = compute_normalization_stats(paths)
@@ -125,9 +123,7 @@ def test_compute_normalization_stats_idempotent(tmp_path, monkeypatch) -> None:
     assert normalization_stats_is_current(paths)
 
 
-def test_compute_normalization_stats_invalidates_on_input_change(
-    tmp_path, monkeypatch
-) -> None:
+def test_compute_normalization_stats_invalidates_on_input_change(tmp_path, monkeypatch) -> None:
     """Mudanças nas entradas devem tornar as estatísticas persistidas obsoletas."""
     import copy
 
@@ -152,9 +148,7 @@ def test_run_sanity_checks_reports_dataset(tmp_path, monkeypatch) -> None:
     assert checks["issues"] == []
 
 
-def test_run_sanity_checks_detects_non_binary_mask(
-    tmp_path, monkeypatch
-) -> None:
+def test_run_sanity_checks_detects_non_binary_mask(tmp_path, monkeypatch) -> None:
     """Valores não binários na máscara devem ser reportados como problema."""
     import pandas as pd
 

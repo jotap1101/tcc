@@ -50,9 +50,7 @@ def bbox_centroid(bbox: str) -> tuple[float, float]:
     return (min_x + max_x) / 2.0, (min_y + max_y) / 2.0
 
 
-def _kmeans_plus_plus_init(
-    centroids: np.ndarray, k: int, rng: np.random.Generator
-) -> np.ndarray:
+def _kmeans_plus_plus_init(centroids: np.ndarray, k: int, rng: np.random.Generator) -> np.ndarray:
     """Inicializa os centros do k-means com o algoritmo k-means++ (determinístico).
 
     O primeiro centro é sorteado uniformemente e cada centro seguinte é sorteado
@@ -75,9 +73,7 @@ def _kmeans_plus_plus_init(
     return np.asarray(centers, dtype=np.float64)
 
 
-def spatial_fold_centroids(
-    centroids: np.ndarray, k: int, seed: int
-) -> np.ndarray:
+def spatial_fold_centroids(centroids: np.ndarray, k: int, seed: int) -> np.ndarray:
     """Agrupa os centroides em k regiões espaciais e rotula de forma determinística.
 
     Aplica k-means determinístico em numpy puro (k-means++ com semente fixa)
@@ -87,8 +83,7 @@ def spatial_fold_centroids(
     """
     if len(centroids) < k:
         raise ValueError(
-            f"Patches insuficientes para {k} dobras ({len(centroids)}); "
-            "reduza splits.fold_count."
+            f"Patches insuficientes para {k} dobras ({len(centroids)}); reduza splits.fold_count."
         )
     rng = np.random.default_rng(seed)
     points = centroids.astype(np.float64, copy=False)
@@ -164,9 +159,7 @@ def split_is_current(storage_paths: dict[str, Path]) -> bool:
     return bool(_load_manifest(storage_paths)["fold"].notna().all())
 
 
-def _write_manifest(
-    path: Path, manifest: pd.DataFrame, storage_paths: dict[str, Path]
-) -> None:
+def _write_manifest(path: Path, manifest: pd.DataFrame, storage_paths: dict[str, Path]) -> None:
     """Persiste o manifesto (com a coluna fold) no Drive canônico."""
     from src import io
 
@@ -175,9 +168,7 @@ def _write_manifest(
     io.persist_file(path, path)
 
 
-def _write_meta(
-    path: Path, payload: dict[str, Any], storage_paths: dict[str, Path]
-) -> None:
+def _write_meta(path: Path, payload: dict[str, Any], storage_paths: dict[str, Path]) -> None:
     """Persiste o metadata da divisão no Drive canônico."""
     from src import io
 
@@ -206,9 +197,7 @@ def assign_spatial_folds(storage_paths: dict[str, Path]) -> Path:
     centroids = np.array([bbox_centroid(value) for value in manifest["bbox"]])
     manifest["fold"] = spatial_fold_centroids(centroids, k, seed)
     _write_manifest(manifest_file, manifest, storage_paths)
-    _write_meta(
-        split_meta_path(storage_paths), split_meta_payload(storage_paths), storage_paths
-    )
+    _write_meta(split_meta_path(storage_paths), split_meta_payload(storage_paths), storage_paths)
     print(f"Divisão espacial k-fold salva em: {manifest_file}")
     return manifest_file
 
@@ -270,9 +259,7 @@ def render_split_figure(manifest: pd.DataFrame) -> bytes:
     folds = manifest["fold"].astype(int)
 
     figure, axis = plt.subplots(figsize=(8, 8))
-    scatter = axis.scatter(
-        centroids[:, 0], centroids[:, 1], c=folds, cmap="tab10", s=12, alpha=0.8
-    )
+    scatter = axis.scatter(centroids[:, 0], centroids[:, 1], c=folds, cmap="tab10", s=12, alpha=0.8)
     axis.set_title(f"Divisão espacial k-fold (k={int(folds.max()) + 1})")
     axis.set_xlabel("Easting (m)")
     axis.set_ylabel("Northing (m)")

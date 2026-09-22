@@ -191,9 +191,7 @@ def test_generate_patches_versions_stale_inputs(tmp_path, monkeypatch) -> None:
     first_image_dir = image_patches_dir(paths, first_hash)
     stale_patch = sorted(first_image_dir.glob("*.npy"))[0]
 
-    _write_geotiff(
-        composite_file, np.zeros((4, 5, 5), dtype=np.uint16), from_origin(0, 5, 10, 10)
-    )
+    _write_geotiff(composite_file, np.zeros((4, 5, 5), dtype=np.uint16), from_origin(0, 5, 10, 10))
     _write_geotiff(mask_file, np.zeros((5, 5), dtype=np.uint8), from_origin(0, 5, 10, 10))
 
     generate_patches(paths)
@@ -245,9 +243,7 @@ def test_generate_patches_requires_aligned_grid(tmp_path, monkeypatch) -> None:
 
     composite_file = composite_path(paths)
     composite_file.parent.mkdir(parents=True)
-    _write_geotiff(
-        composite_file, np.zeros((2, 4, 4), dtype=np.uint16), from_origin(0, 4, 10, 10)
-    )
+    _write_geotiff(composite_file, np.zeros((2, 4, 4), dtype=np.uint16), from_origin(0, 4, 10, 10))
     mask_file = final_mask_path(paths)
     mask_file.parent.mkdir(parents=True)
     _write_geotiff(mask_file, np.zeros((4, 4), dtype=np.uint8), from_origin(5, 9, 10, 10))

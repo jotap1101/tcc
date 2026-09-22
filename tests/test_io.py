@@ -42,6 +42,7 @@ def test_relocate_exported_file_local(tmp_path, monkeypatch) -> None:
 
     file_name = "sentinel2_310044_2023-01-01_2023-12-31.tif"
     staging = tmp_path / "tcc" / file_name
+    staging.parent.mkdir(parents=True, exist_ok=True)
     staging.write_bytes(b"mosaic")
 
     target = tmp_path / "tcc" / "data" / "raw" / "sentinel2" / file_name

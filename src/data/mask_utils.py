@@ -9,8 +9,9 @@ as exportações são idempotentes — reexecuções reutilizam o GeoTIFF já ex
 from __future__ import annotations
 
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from src.config import get_config
 
@@ -31,9 +32,7 @@ def mask_file_name(source: str, region_code: str, year: int) -> str:
 def source_mask_path(source_name: str, storage_paths: dict[str, Path]) -> Path:
     """Caminho canônico do GeoTIFF da máscara da fonte (data/interim/<fonte>/)."""
     config = get_config()
-    file_prefix = mask_file_name(
-        source_name, config["aoi"]["region_code"], reference_year()
-    )
+    file_prefix = mask_file_name(source_name, config["aoi"]["region_code"], reference_year())
     return storage_paths["data_interim"] / source_name / f"{file_prefix}.tif"
 
 
@@ -46,9 +45,7 @@ def build_mapbiomas_mask(aoi: Any) -> Any:
     import ee
 
     source = get_config()["ground_truth"]["sources"]["mapbiomas"]
-    image = ee.Image(source["collection_id"]).select(
-        f"classification_{reference_year()}"
-    )
+    image = ee.Image(source["collection_id"]).select(f"classification_{reference_year()}")
     return image.eq(source["coffee_class"]).clip(aoi).rename(MASK_BAND)
 
 
@@ -67,11 +64,7 @@ def build_alphaearth_mask(aoi: Any) -> Any:
         f"{year}-01-01", f"{year}-12-31"
     )
     probability = collection.mosaic().select("probability")
-    return (
-        probability.gte(source["probability_threshold"])
-        .clip(aoi)
-        .rename(MASK_BAND)
-    )
+    return probability.gte(source["probability_threshold"]).clip(aoi).rename(MASK_BAND)
 
 
 MASK_BUILDERS: dict[str, Callable[[Any], Any]] = {
