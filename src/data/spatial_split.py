@@ -2,12 +2,14 @@
 
 Atribui cada patch registrado no manifesto do estágio 06 a uma das k dobras
 (`splits.fold_count`) por proximidade geográfica: os centroides das bboxes são
-agrupados com KMeans (semente fixa, algoritmo Lloyd) e os grupos são rotulados
-de forma determinística pela posição dos centros. A contiguidade espacial dos
-grupos reduz o vazamento por autocorrelação espacial entre treino e validação
-nos estágios 09/10. A divisão é gravada na coluna `fold` do próprio manifesto e
-versionada em split.meta.json (fingerprint do manifesto + dobras + semente);
-execuções repetidas reutilizam a divisão vigente sem reprocessamento.
+agrupados com k-means determinístico (implementado em numpy puro, k-means++ com
+semente fixa) e os grupos são rotulados de forma determinística pela posição dos
+centros. A contiguidade espacial dos grupos reduz o vazamento por autocorrelação
+espacial entre treino e validação nos estágios 09/10. A divisão é gravada na
+coluna `fold` do próprio manifesto e versionada em split.meta.json (fingerprint
+do manifesto + dobras + semente); execuções repetidas reutilizam a divisão
+vigente sem reprocessamento. A implementação em numpy puro evita dependência do
+scikit-learn (cuja importação de numpy.testing é sensível a versões do numpy).
 """
 
 from __future__ import annotations
@@ -48,26 +50,66 @@ def bbox_centroid(bbox: str) -> tuple[float, float]:
     return (min_x + max_x) / 2.0, (min_y + max_y) / 2.0
 
 
+def _kmeans_plus_plus_init(
+    centroids: np.ndarray, k: int, rng: np.random.Generator
+) -> np.ndarray:
+    """Inicializa os centros do k-means com o algoritmo k-means++ (determinístico).
+
+    O primeiro centro é sorteado uniformemente e cada centro seguinte é sorteado
+    com probabilidade proporcional à distância ao quadrado até o centro mais
+    próximo, dispersando os centros iniciais sobre o domínio.
+    """
+    centers = [centroids[int(rng.integers(len(centroids)))]]
+    for _ in range(1, k):
+        distances = np.min(
+            np.linalg.norm(centroids[:, None, :] - np.asarray(centers)[None, :, :], axis=2) ** 2,
+            axis=1,
+        )
+        total = float(distances.sum())
+        # Fallback uniforme quando as distâncias somam zero (pontos coincidentes).
+        if not np.isfinite(total) or total <= 0.0:
+            pick = int(rng.integers(len(centroids)))
+        else:
+            pick = int(rng.choice(len(centroids), p=distances / total))
+        centers.append(centroids[pick])
+    return np.asarray(centers, dtype=np.float64)
+
+
 def spatial_fold_centroids(
     centroids: np.ndarray, k: int, seed: int
 ) -> np.ndarray:
     """Agrupa os centroides em k regiões espaciais e rotula de forma determinística.
 
-    Aplica KMeans (semente fixa, Lloyd) sobre as coordenadas dos centroides e
-    reordena os rótulos pela posição dos centros (x, depois y), tornando o
-    número da dobra estável e independente da ordem dos patches no manifesto.
+    Aplica k-means determinístico em numpy puro (k-means++ com semente fixa)
+    sobre as coordenadas dos centroides e reordena os rótulos pela posição dos
+    centros (x, depois y), tornando o número da dobra estável e independente da
+    ordem dos patches no manifesto.
     """
-    from sklearn.cluster import KMeans
-
     if len(centroids) < k:
         raise ValueError(
             f"Patches insuficientes para {k} dobras ({len(centroids)}); "
             "reduza splits.fold_count."
         )
-    model = KMeans(n_clusters=k, random_state=seed, n_init=10, algorithm="lloyd")
-    labels = model.fit_predict(centroids)
-    centers = model.cluster_centers_
-    # Ordena os grupos por posição (x, depois y) para um rótulo estável.
+    rng = np.random.default_rng(seed)
+    points = centroids.astype(np.float64, copy=False)
+    centers = _kmeans_plus_plus_init(points, k, rng)
+    labels = np.zeros(len(points), dtype=np.int64)
+    for _ in range(100):
+        distances = np.linalg.norm(points[:, None, :] - centers[None, :, :], axis=2)
+        new_labels = np.argmin(distances, axis=1)
+        new_centers = np.asarray(
+            [
+                points[new_labels == cluster].mean(axis=0)
+                if (new_labels == cluster).any()
+                else centers[cluster]
+                for cluster in range(k)
+            ],
+            dtype=np.float64,
+        )
+        if np.array_equal(new_labels, labels) and np.allclose(new_centers, centers):
+            centers, labels = new_centers, new_labels
+            break
+        centers, labels = new_centers, new_labels
     order = np.lexsort((centers[:, 1], centers[:, 0]))
     relabel = {old: new for new, old in enumerate(order)}
     return np.array([relabel[int(label)] for label in labels])

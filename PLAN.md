@@ -139,7 +139,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 - [x] `05_preprocessing.ipynb`
 - [x] `06_patch_generation.ipynb`
-- [x] `07_spatial_kfold_split.ipynb` — divisão espacial k-fold (KMeans determinístico sobre centroides) gravada na coluna `fold` do manifesto, com `split.meta.json` para idempotência
+- [x] `07_spatial_kfold_split.ipynb` — divisão espacial k-fold (k-means determinístico em numpy puro sobre centroides) gravada na coluna `fold` do manifesto, com `split.meta.json` para idempotência
 - [ ] `08_dataset_eda.ipynb`
 
 ### Phase 4 — Training
