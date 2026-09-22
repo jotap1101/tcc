@@ -36,6 +36,15 @@
       "type": "remote",
       "url": "https://huggingface.co/mcp?login",
       "enabled": true
+    },
+    "drive": {
+      "type": "remote",
+      "url": "https://drivemcp.googleapis.com/mcp/v1",
+      "enabled": true,
+      "oauth": {
+        "clientId": "{env:GOOGLE_DRIVE_CLIENT_ID}",
+        "clientSecret": "{env:GOOGLE_DRIVE_CLIENT_SECRET}"
+      }
     }
   }
 }
