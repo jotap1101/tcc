@@ -35,15 +35,17 @@ tcc/
 ├── pyproject.toml / uv.lock       # uv + ruff + mypy + pytest
 ├── src/                           # shared package (reusable logic)
 │   ├── config.py + config.yaml
-│   ├── data/{dataset,augmentations,manifest,mask_utils,gee_client}.py
+│   ├── bootstrap.py  setup.py  io.py  utils.py
+│   ├── data/{augmentations,dataset,eda,gee_client,mask_comparison,mask_finalization,mask_utils,patch_generation,preprocessing,raster_utils,spatial_split}.py
 │   ├── losses.py
 │   ├── metrics.py
 │   ├── trainer.py
 │   ├── models/{unet,segformer}.py
-│   ├── xai/{gradcam,attention_rollout}.py
-│   └── io.py  utils.py
+│   └── xai/{gradcam,attention_rollout}.py
 ├── tests/                         # pytest over src/ only
 ├── notebooks/                     # 17 sequential .ipynb files
+├── scripts/                       # geradores de tokens OAuth (Drive, GEE) — uso local
+├── secrets/                       # apenas templates versionados (README.md, .env.example)
 ├── data/{raw,interim,processed}/            # git-ignored mirror of MyDrive/tcc/data
 │   └── external/                            # dados de referência VERSIONADOS (ex.: malha IBGE)
 ├── models/                        # git-ignored mirror of MyDrive/tcc/models
@@ -88,29 +90,29 @@ GEE Sentinel-2 L2A (B2/B3/B4/B8) filtered by AOI
 
 Each notebook is an isolated stage with a single responsibility and declared inputs/outputs. Execution order is numeric.
 
-| #    | Notebook                                | Phase            | Input → Output                                                                                |
-| ---- | --------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------- |
-| `00` | `setup_environment.ipynb`               | 0. Setup         | — → env ready, `src/` delivered, Drive `tcc/` root resolved, config loaded, GEE authenticated |
-| `01` | `gee_sentinel2_acquisition.ipynb`       | 1. Acquisition   | IBGE mesh (310044) → AOI polygon → Sentinel-2 L2A GeoTIFF mosaics                             |
-| `02` | `gee_reference_masks.ipynb`             | 1. Acquisition   | each source (MapBiomas/AlphaEarth/...) → per-source 10 m binary masks                         |
-| `03` | `mask_sources_comparison.ipynb`         | 2. Ground Truth  | per-source masks → comparative diagnostic                                                     |
-| `04` | `mask_finalization.ipynb`               | 2. Ground Truth  | chosen source → final binary masks                                                            |
-| `05` | `preprocessing.ipynb`                   | 3. Preprocessing | mosaics → cloud-free normalized composites                                                    |
-| `06` | `patch_generation.ipynb`                | 3. Dataset       | composites+masks → 512x512 patches + manifest                                                 |
-| `07` | `spatial_kfold_split.ipynb`             | 3. Dataset       | manifest → manifest with `fold`                                                               |
-| `08` | `dataset_eda.ipynb`                     | 3. Dataset       | manifest → normalization stats + sanity checks                                                |
-| `09` | `train_unet.ipynb`                      | 4. Training      | dataset → U-Net weights + per-fold metrics                                                    |
-| `10` | `train_segformer.ipynb`                 | 4. Training      | dataset → SegFormer weights + per-fold metrics                                                |
-| `11` | `evaluation.ipynb`                      | 5. Evaluation    | predictions → pixel-level IoU/F1/P/R                                                          |
-| `12` | `comparative_analysis.ipynb`            | 5. Evaluation    | metrics → statistical comparison + error maps                                                 |
-| `13` | `xai_gradcam_unet.ipynb`                | 6. XAI           | U-Net → Grad-CAM heatmaps                                                                     |
-| `14` | `xai_attention_rollout_segformer.ipynb` | 6. XAI           | SegFormer → Attention Rollout maps                                                            |
-| `15` | `results_synthesis.ipynb`               | 7. Synthesis     | all → figures/tables for monografia                                                           |
-| `16` | `export_release.ipynb`                  | 7. Dissemination | patches+weights → HF Hub dataset + models                                                     |
+| Notebook                                | Phase            | Input → Output                                                                                |
+| --------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------- |
+| `00_setup_environment.ipynb`            | 0. Setup         | — → env ready, `src/` delivered, Drive `tcc/` root resolved, config loaded, GEE authenticated |
+| `01_gee_sentinel2_acquisition.ipynb`    | 1. Acquisition   | IBGE mesh (310044) → AOI polygon → Sentinel-2 L2A GeoTIFF mosaics                             |
+| `02_gee_reference_masks.ipynb`          | 1. Acquisition   | each source (MapBiomas/AlphaEarth/...) → per-source 10 m binary masks                         |
+| `03_mask_sources_comparison.ipynb`      | 2. Ground Truth  | per-source masks → comparative diagnostic                                                     |
+| `04_mask_finalization.ipynb`            | 2. Ground Truth  | chosen source → final binary masks                                                            |
+| `05_preprocessing.ipynb`                | 3. Preprocessing | mosaics → cloud-free normalized composites                                                    |
+| `06_patch_generation.ipynb`             | 3. Dataset       | composites+masks → 512x512 patches + manifest                                                 |
+| `07_spatial_kfold_split.ipynb`          | 3. Dataset       | manifest → manifest with `fold`                                                               |
+| `08_dataset_eda.ipynb`                  | 3. Dataset       | manifest → normalization stats + sanity checks                                                |
+| `09_train_unet.ipynb`                   | 4. Training      | dataset → U-Net weights + per-fold metrics                                                    |
+| `10_train_segformer.ipynb`              | 4. Training      | dataset → SegFormer weights + per-fold metrics                                                |
+| `11_evaluation.ipynb`                   | 5. Evaluation    | predictions → pixel-level IoU/F1/P/R                                                          |
+| `12_comparative_analysis.ipynb`         | 5. Evaluation    | metrics → statistical comparison + error maps                                                 |
+| `13_xai_gradcam_unet.ipynb`             | 6. XAI           | U-Net → Grad-CAM heatmaps                                                                     |
+| `14_xai_attention_rollout_segformer.ipynb` | 6. XAI        | SegFormer → Attention Rollout maps                                                            |
+| `15_results_synthesis.ipynb`            | 7. Synthesis     | all → figures/tables for monografia                                                           |
+| `16_export_release.ipynb`               | 7. Dissemination | patches+weights → HF Hub dataset + models                                                     |
 
 ## 6. Config & artifacts schema
 
-- **`config.yaml`**: `aoi` (region code `310044`, `vector_source` `ibge_mesh`, `mesh_path` apontando para `data/external/ibge/mg_rg_immediatas_2025/`), `data` (`collection`, `dates`, `bands`, `patch_size`, `coffee_min_ratio`, `cloud_threshold`), `splits.fold_count`, `reproducibility.seed`, `model` (`unet_channels`, `segformer_variant`), `loss` weights, `training` (`lr`, `epochs`, `batch_size`). A `storage` block maps the Drive `tcc/` root and every subfolder (`data`, `models`, `artifacts`, `repo`, `secrets`, ...) — all paths are resolved from here, never hardcoded. A `ground_truth.sources` block lists every source with its output subfolder.
+- **`config.yaml`**: `aoi` (region code `310044`, `vector_source` `ibge_mesh`, `mesh_path` apontando para `data/external/ibge/mg_rg_immediatas_2025/`), `data` (`collection`, `dates`, `bands`, `patch_size`, `coffee_min_ratio`, `cloud_threshold`, `crs`, `export`), `gee` (`project` — ID do projeto Cloud para `ee.Initialize`), `ground_truth` (`chosen_source` + bloco `sources` com `collection_id`, classe/limiar e `enabled` por fonte), `splits.fold_count`, `reproducibility.seed`, `model` (`unet_channels`, `segformer_variant`), `loss` weights, `augmentation` (aumentações geométricas determinísticas reseedadas por época: `hflip_prob`, `vflip_prob`, `rot90_prob`), `training` (`lr`, `epochs`, `batch_size`, `weight_decay`, `num_workers`). A `storage` block maps the Drive `tcc/` root and every subfolder (`data`, `models`, `artifacts`, `repo`, `secrets`, ...) — all paths are resolved from here, never hardcoded.
 - **`manifest.parquet` columns**: `patch_id`, `tile_id`, `fold`, `row`, `col`, `bbox`, `coffee_ratio`, `mask_source`, `image_path`, `mask_path`.
 - **Artifacts** (all under the Drive `tcc/` root, paths resolved from `config.yaml`): `MyDrive/tcc/artifacts/metrics/{model}/fold_{i}.json`, `MyDrive/tcc/artifacts/figures/`, `MyDrive/tcc/models/{model}/fold_{i}.pt`, `MyDrive/tcc/data/processed/manifest.parquet`, and `MyDrive/tcc/data/processed/normalization_stats.json` (estatísticas de normalização por banda — estágio 08).
 

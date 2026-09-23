@@ -97,7 +97,7 @@ Research project (deep learning / computer vision) on **semantic segmentation of
 
 ### MCP tools
 
-Use the available MCP servers actively for repository inspection, architectural validation, and multi-step reasoning while designing the practical structure: `github`, `context7`, `gh_grep`, `sequential-thinking`, `hf-mcp-server` (see `opencode.json`).
+Use the available MCP servers actively for repository inspection, architectural validation, and multi-step reasoning while designing the practical structure: `github`, `context7`, `gh_grep`, `sequential-thinking`, `hf-mcp-server`, `drive` (see `opencode.json`).
 
 ## Execution Environment (critical)
 
@@ -126,7 +126,13 @@ Use the available MCP servers actively for repository inspection, architectural 
 
 - **`docs/`** is a **git submodule** (`tcc-docs`) containing only theoretical material: images, literature-review articles, defense slides, the research project, etc. Treat it as **read-only** — never modify it.
 - **`PLAN.md`** is the authoritative roadmap: it defines phase ordering and each notebook's inputs/outputs. Notebooks are executed following it.
+- **`src/`** is the shared package (config, io/bootstrap/setup, data/*, losses, metrics, trainer, models, xai) — the only target of `ruff`/`mypy`/`pytest`. `src/setup.py` exposes the standard runtime prologue (`RuntimeContext.initialize()`: platform detection, canonical storage resolution, config load) shared by the notebooks.
+- **`scripts/`** holds one-off local utilities that generate OAuth tokens (Drive, GEE) for Kaggle (`generate_drive_token.py`, `generate_gee_credentials.py`) — never executed by the notebooks.
+- **`secrets/`** is versioned as **templates only**: `README.md` and `.env.example`. Real tokens (git-ignored `drive_token.json`, `earthengine_credentials.json`) are never tracked.
+- **`requirements-runtime.txt`** pins the exact runtime library versions that notebook `00` installs on every platform.
+- **`data/external/`** holds small immutable reference inputs (e.g., the IBGE mesh) and **is versioned** in the repo, delivered to the runtime alongside `src/` by the workspace bootstrap; `data/{raw,interim,processed}` remain git-ignored mirrors of the Drive.
+- **`opencode.json`** is local-only AI-assistant configuration (it holds the Drive MCP OAuth `clientSecret`) — git-ignored and never versioned; treat it as machine-local state.
 
 ## Status
 
-Scaffolding in place: `pyproject.toml`, `requirements-runtime.txt`, `src/` (config, io, utils), `tests/`, CI and this rulebook. Stage notebooks (`.ipynb`) not yet created.
+Stages `00`–`09` are implemented and versioned: Sentinel-2 acquisition (GEE), per-source reference masks and finalization (AlphaEarth), preprocessing, patch generation + manifest, spatial k-fold split (k=5), EDA and U-Net training (single protocol via `src/trainer.py`). The shared package covers config, io/bootstrap/setup, data/*, losses, metrics, trainer and models/unet, backed by `tests/` and CI (ruff, mypy, pytest, notebook conventions). Pending: SegFormer (`10`), evaluation (`11`/`12`), XAI (`13`/`14`) and synthesis/dissemination (`15`/`16`) — see `PLAN.md`.

@@ -167,6 +167,8 @@ venv.bak/
 *client_secret*.json
 /credentials/
 articulate-case-508513-m4-f0f3c3599df0.json
+# opencode.json contém clientSecret OAuth do MCP do Drive — local, nunca versionar
+/opencode.json
 
 # Spyder project settings
 .spyderproject

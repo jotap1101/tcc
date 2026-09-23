@@ -44,12 +44,16 @@ tcc/
 ├── PLAN.md                # roteiro de implementação
 ├── pyproject.toml         # uv, ruff, mypy, pytest
 ├── requirements-runtime.txt  # versões pinadas instaladas pelo notebook 00
-├── src/                   # pacote Python compartilhado (config, io, utils, ...)
+├── src/                   # pacote Python compartilhado (config, io, bootstrap, data, losses, trainer, models, ...)
 ├── tests/                 # pytest apenas sobre src/
 ├── notebooks/             # estágios .ipynb sequenciais
+├── scripts/               # geradores de tokens OAuth (Drive, GEE) — uso local, para o Kaggle
+├── secrets/               # apenas templates versionados (README.md, .env.example) — tokens nunca
 ├── data/                  # espelho local de MyDrive/tcc/data (ignorado pelo git)
+│   └── external/          # dados de referência versionados (ex.: malha IBGE)
 ├── models/                # espelho local de MyDrive/tcc/models (ignorado pelo git)
-└── artifacts/             # espelho local de MyDrive/tcc/artifacts (ignorado pelo git)
+├── artifacts/             # espelho local de MyDrive/tcc/artifacts (ignorado pelo git)
+└── docs/                  # submodulo git (tcc-docs) — material teórico, somente leitura
 ```
 
 O **armazenamento canônico** de dados e artefatos não fica no repositório: tudo é gravado dentro da pasta **`tcc/` na raiz do Google Drive** (`MyDrive/tcc/`), acessada ou criada pelos próprios notebooks (junto com todas as subpastas de que precisarem). Nenhuma estrutura pré-criada é assumida:
@@ -87,7 +91,7 @@ Para garantir o mesmo protocolo de execução nas duas plataformas, o notebook `
 
 ## Status
 
-Scaffolding pronto: `pyproject.toml`, `requirements-runtime.txt`, `src/` (config, io, utils), `tests/`, CI e regras documentadas. Os notebooks de estágio (`.ipynb`) ainda não foram criados.
+Estágios `00`–`09` implementados e versionados: aquisição Sentinel-2 (GEE), máscaras de referência por fonte e finalização (AlphaEarth), pré-processamento, geração de patches + manifesto, divisão espacial k-fold (k=5), EDA e treino do **U-Net** com o protocolo único (`src/trainer.py`). O pacote `src/` cobre `config`, `io`/`bootstrap`/`setup`, `data/*`, `losses`, `metrics`, `trainer` e `models/unet`, com `tests/` e CI (ruff, mypy, pytest e convenções de notebook). Pendentes: SegFormer (`10`), avaliação (`11`/`12`), XAI (`13`/`14`) e síntese/disseminação (`15`/`16`) — consulte o `PLAN.md`.
 
 ## Contribuição
 
