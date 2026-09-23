@@ -97,11 +97,23 @@ def _seed_drive_mirror(workspace: pathlib.Path) -> None:
     _refresh(workspace / "data" / "external", mirror / "data" / "external")
 
 
+def _purge_src_modules() -> None:
+    """Remove os módulos src.* em cache para forçar a versão recém-entregue.
+
+    Reexecuções no mesmo kernel podem manter módulos antigos importados; a
+    remoção de `sys.modules` garante que a próxima importação use o código
+    recém-sincronizado pelo bootstrap.
+    """
+    for module in [m for m in list(sys.modules) if m == "src" or m.startswith("src.")]:
+        del sys.modules[module]
+
+
 def bootstrap_workspace(workspace: pathlib.Path | None = None) -> pathlib.Path:
     """Executa o bootstrap completo e retorna o caminho do workspace."""
     if workspace is None:
         workspace = workspace_root()
     _download_and_extract(workspace)
+    _purge_src_modules()
     _seed_drive_mirror(workspace)
     if str(workspace) not in sys.path:
         sys.path.insert(0, str(workspace))

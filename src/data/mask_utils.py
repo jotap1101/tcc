@@ -106,14 +106,25 @@ def export_mask_to_drive(
     )
 
 
-def save_mask_preview(source_name: str, aoi: Any, preview_path: Path) -> None:
-    """Salva a miniatura binária (0/1) da máscara da fonte (idempotente)."""
+def save_mask_preview(
+    source_name: str,
+    aoi: Any,
+    storage_paths: dict[str, Path],
+) -> Path:
+    """Salva a miniatura binária (0/1) da máscara da fonte (idempotente).
+
+    O caminho da figura é derivado da configuração e do armazenamento canônico;
+    reutiliza a miniatura já existente em execuções repetidas.
+    """
     from src import io
 
+    config = get_config()
+    file_prefix = mask_file_name(source_name, config["aoi"]["region_code"], reference_year())
+    preview_path = storage_paths["artifacts_figures"] / f"{file_prefix}_preview.png"
     # Reutiliza a miniatura já gerada (execuções repetidas não reprocessam).
     if io.path_exists(preview_path):
         print(f"Figura já existente: {preview_path}")
-        return
+        return preview_path
     mask = build_mask(source_name, aoi)
     thumb_url = mask.getThumbURL(
         {
@@ -126,6 +137,7 @@ def save_mask_preview(source_name: str, aoi: Any, preview_path: Path) -> None:
     )
     io.persist_bytes(preview_path, urllib.request.urlopen(thumb_url).read())
     print(f"Figura salva em: {preview_path}")
+    return preview_path
 
 
 def ensure_source_mask(

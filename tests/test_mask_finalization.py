@@ -9,6 +9,7 @@ from src.config import get_config
 from src.data import mask_finalization
 from src.data.mask_finalization import (
     chosen_source,
+    comparison_pair_key,
     ensure_final_mask,
     final_mask_file_name,
     final_mask_path,
@@ -57,6 +58,12 @@ def test_artifact_file_names_derive_from_config() -> None:
     assert finalization_report_file_name().endswith(".json")
     assert final_mask_preview_file_name().endswith(".png")
     assert config["aoi"]["region_code"] in final_mask_file_name()
+
+
+def test_comparison_pair_key_selects_chosen_source_pair() -> None:
+    """comparison_pair_key deve localizar o par que envolve a fonte escolhida."""
+    comparison = {"pairs": {"alphaearth_vs_mapbiomas": {"metrics": {"kappa": 0.5}}}}
+    assert comparison_pair_key(comparison, "alphaearth") == "alphaearth_vs_mapbiomas"
 
 
 def test_chosen_source_reads_config() -> None:

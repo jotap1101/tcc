@@ -9,7 +9,6 @@ idempotentes — reexecuções reutilizam a máscara, o relatório e a figura ex
 
 from __future__ import annotations
 
-import io as stdlib_io
 import json
 from pathlib import Path
 from typing import Any
@@ -48,6 +47,11 @@ def finalization_report_file_name() -> str:
     """Nome estável do relatório de finalização, derivado da configuração."""
     config = get_config()
     return f"mask_finalization_{config['aoi']['region_code']}_{reference_year()}.json"
+
+
+def comparison_pair_key(comparison: dict[str, Any], chosen: str) -> str:
+    """Chave do par de concordância do relatório que envolve a fonte escolhida."""
+    return next(key for key in comparison["pairs"] if chosen in key)
 
 
 def load_comparison_report(storage_paths: dict[str, Path]) -> dict[str, Any]:
@@ -171,29 +175,26 @@ def save_final_mask_preview(storage_paths: dict[str, Path]) -> Path:
 
 def render_final_mask_preview(mask_path: Path) -> bytes:
     """Renderiza a miniatura binária da máscara final (café em roxo)."""
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
     import rasterio
     from matplotlib.colors import ListedColormap
+
+    from src.data.raster_utils import render_figure
 
     with rasterio.open(mask_path) as src:
         mask = src.read(1) > 0
 
-    figure, axis = plt.subplots(figsize=(8, 8))
-    axis.imshow(
-        display_array(mask),
-        cmap=ListedColormap(COFFEE_COLORS),
-        vmin=0,
-        vmax=1,
-    )
-    axis.set_title("Máscara binária final de café")
-    axis.set_xticks([])
-    axis.set_yticks([])
-    figure.tight_layout()
+    def _build(plt: Any) -> Any:
+        figure, axis = plt.subplots(figsize=(8, 8))
+        axis.imshow(
+            display_array(mask),
+            cmap=ListedColormap(COFFEE_COLORS),
+            vmin=0,
+            vmax=1,
+        )
+        axis.set_title("Máscara binária final de café")
+        axis.set_xticks([])
+        axis.set_yticks([])
+        figure.tight_layout()
+        return figure
 
-    buffer = stdlib_io.BytesIO()
-    figure.savefig(buffer, format="png", dpi=110)
-    plt.close(figure)
-    return buffer.getvalue()
+    return render_figure(_build)

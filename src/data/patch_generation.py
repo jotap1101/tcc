@@ -24,7 +24,8 @@ import pandas as pd
 from src.config import get_config
 from src.data.mask_finalization import chosen_source, final_mask_path
 from src.data.mask_utils import reference_year
-from src.data.preprocessing import _same_grid, composite_file_name, composite_path
+from src.data.preprocessing import composite_file_name, composite_path
+from src.data.raster_utils import same_grid
 
 MANIFEST_SCHEMA_VERSION = 1
 
@@ -47,6 +48,31 @@ def manifest_path(storage_paths: dict[str, Path]) -> Path:
 def manifest_meta_path(storage_paths: dict[str, Path]) -> Path:
     """Caminho do metadata do manifesto (fingerprint para idempotência)."""
     return storage_paths["data_processed"] / "manifest.meta.json"
+
+
+def require_manifest(storage_paths: dict[str, Path]) -> None:
+    """Falha com mensagem clara quando o manifesto do estágio 06 está ausente."""
+    from src import io
+
+    manifest = manifest_path(storage_paths)
+    if not io.path_exists(manifest):
+        raise FileNotFoundError(f"Manifesto do estágio 06 não encontrado: {manifest}")
+
+
+def load_manifest(storage_paths: dict[str, Path]) -> pd.DataFrame:
+    """Carrega o manifesto persistido e valida que não está vazio."""
+    from src import io
+
+    local_manifest = io.ensure_local_copy(manifest_path(storage_paths))
+    manifest = pd.read_parquet(local_manifest)
+    if manifest.empty:
+        raise ValueError("Manifesto vazio; execute o estágio 06 antes.")
+    return manifest
+
+
+def manifest_has_folds(manifest: pd.DataFrame) -> bool:
+    """Indica se a divisão espacial (coluna fold) está presente e sem valores nulos."""
+    return "fold" in manifest.columns and not manifest["fold"].isna().any()
 
 
 def patch_id(tile_id: str, row: int, col: int) -> str:
@@ -151,7 +177,7 @@ def _require_dependency(label: str, path: Path, storage_paths: dict[str, Path]) 
 
 def _check_same_grid(composite: Any, mask: Any) -> None:
     """Valida que composite e máscara compartilham o mesmo grid (pixel a pixel)."""
-    if not _same_grid(composite, mask):
+    if not same_grid(composite, mask):
         raise ValueError("Composite e máscara final em grids distintos; reexecute o estágio 05.")
 
 
@@ -171,9 +197,9 @@ def _write_patch(target_path: Path, array: np.ndarray) -> None:
     """Persiste um patch localmente e no Drive canônico (upload no Kaggle)."""
     from src import io
 
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    np.save(target_path, array)
-    io.persist_file(target_path, target_path)
+    buffer = stdlib_io.BytesIO()
+    np.save(buffer, array)
+    io.persist_bytes(target_path, buffer.getvalue())
 
 
 def _write_manifest(
@@ -182,18 +208,16 @@ def _write_manifest(
     """Persiste o manifesto em Parquet no Drive canônico."""
     from src import io
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(records).to_parquet(path, index=False)
-    io.persist_file(path, path)
+    buffer = stdlib_io.BytesIO()
+    pd.DataFrame(records).to_parquet(buffer, index=False)
+    io.persist_bytes(path, buffer.getvalue())
 
 
 def _write_metadata(path: Path, payload: dict[str, Any], storage_paths: dict[str, Path]) -> None:
     """Persiste o metadata (fingerprint) do manifesto no Drive canônico."""
     from src import io
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    io.persist_file(path, path)
+    io.persist_bytes(path, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
 
 
 def generate_patches(storage_paths: dict[str, Path]) -> Path:
@@ -282,22 +306,11 @@ def generate_patches(storage_paths: dict[str, Path]) -> Path:
     return manifest
 
 
-def _load_manifest(storage_paths: dict[str, Path]) -> pd.DataFrame:
-    """Carrega o manifesto persistido e valida que não está vazio."""
-    from src import io
-
-    local_manifest = io.ensure_local_copy(manifest_path(storage_paths))
-    manifest = pd.read_parquet(local_manifest)
-    if manifest.empty:
-        raise ValueError("Manifesto vazio; nenhum patch superou data.coffee_min_ratio.")
-    return manifest
-
-
 def verify_manifest(storage_paths: dict[str, Path]) -> dict[str, Any]:
     """Verifica o manifesto persistido: contagem, café e formato dos patches."""
     from src import io
 
-    manifest = _load_manifest(storage_paths)
+    manifest = load_manifest(storage_paths)
     with_coffee = manifest["coffee_ratio"] > 0
     ratios = manifest["coffee_ratio"]
     first_image = io.ensure_local_copy(
@@ -332,7 +345,7 @@ def save_patch_montage(storage_paths: dict[str, Path]) -> Path:
         print(f"Figura já existente (reutilizada): {figure_path}")
         return figure_path
 
-    manifest = _load_manifest(storage_paths)
+    manifest = load_manifest(storage_paths)
     samples = manifest.sort_values("coffee_ratio", ascending=False).head(3)
     io.persist_bytes(figure_path, render_patch_montage(samples, storage_paths))
     print(f"Figura salva em: {figure_path}")
@@ -341,54 +354,50 @@ def save_patch_montage(storage_paths: dict[str, Path]) -> Path:
 
 def render_patch_montage(manifest: pd.DataFrame, storage_paths: dict[str, Path]) -> bytes:
     """Renderiza o mosaico RGB + máscara das amostras mais cafeeiras."""
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
     from matplotlib.colors import ListedColormap
 
     from src import io
     from src.data.mask_comparison import COFFEE_COLORS, display_array
-    from src.data.preprocessing import _percentile_stretch
+    from src.data.raster_utils import percentile_stretch, render_figure
 
     bands = get_config()["data"]["bands"]
     band_index = {name: i for i, name in enumerate(bands)}
-    figure, axes = plt.subplots(len(manifest), 2, figsize=(10, 5 * len(manifest)))
-    axes = np.atleast_2d(axes)
-    for row, (_, record) in enumerate(manifest.iterrows()):
-        image = np.load(
-            io.ensure_local_copy(resolve_from_root(str(record["image_path"]), storage_paths))
-        )
-        mask = (
-            np.load(
-                io.ensure_local_copy(resolve_from_root(str(record["mask_path"]), storage_paths))
-            )
-            > 0
-        )
-        rgb = np.stack(
-            [
-                _percentile_stretch(image[band_index["B4"]]),
-                _percentile_stretch(image[band_index["B3"]]),
-                _percentile_stretch(image[band_index["B2"]]),
-            ],
-            axis=-1,
-        )
-        axes[row, 0].imshow(rgb)
-        axes[row, 0].set_title(f"{record['patch_id']} — café {record['coffee_ratio']:.2%}")
-        axes[row, 0].set_xticks([])
-        axes[row, 0].set_yticks([])
-        axes[row, 1].imshow(
-            display_array(mask),
-            cmap=ListedColormap(COFFEE_COLORS),
-            vmin=0,
-            vmax=1,
-        )
-        axes[row, 1].set_title("Máscara")
-        axes[row, 1].set_xticks([])
-        axes[row, 1].set_yticks([])
-    figure.tight_layout()
 
-    buffer = stdlib_io.BytesIO()
-    figure.savefig(buffer, format="png", dpi=110)
-    plt.close(figure)
-    return buffer.getvalue()
+    def _build(plt: Any) -> Any:
+        figure, axes = plt.subplots(len(manifest), 2, figsize=(10, 5 * len(manifest)))
+        axes = np.atleast_2d(axes)
+        for row, (_, record) in enumerate(manifest.iterrows()):
+            image = np.load(
+                io.ensure_local_copy(resolve_from_root(str(record["image_path"]), storage_paths))
+            )
+            mask = (
+                np.load(
+                    io.ensure_local_copy(resolve_from_root(str(record["mask_path"]), storage_paths))
+                )
+                > 0
+            )
+            rgb = np.stack(
+                [
+                    percentile_stretch(image[band_index["B4"]]),
+                    percentile_stretch(image[band_index["B3"]]),
+                    percentile_stretch(image[band_index["B2"]]),
+                ],
+                axis=-1,
+            )
+            axes[row, 0].imshow(rgb)
+            axes[row, 0].set_title(f"{record['patch_id']} — café {record['coffee_ratio']:.2%}")
+            axes[row, 0].set_xticks([])
+            axes[row, 0].set_yticks([])
+            axes[row, 1].imshow(
+                display_array(mask),
+                cmap=ListedColormap(COFFEE_COLORS),
+                vmin=0,
+                vmax=1,
+            )
+            axes[row, 1].set_title("Máscara")
+            axes[row, 1].set_xticks([])
+            axes[row, 1].set_yticks([])
+        figure.tight_layout()
+        return figure
+
+    return render_figure(_build)

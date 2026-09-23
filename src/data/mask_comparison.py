@@ -9,7 +9,6 @@ O processamento é determinístico e as persistências são idempotentes.
 
 from __future__ import annotations
 
-import io as stdlib_io
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -188,10 +187,7 @@ def save_figure(
 
 def render_comparison_figure(mask_set: MaskSet, reference: str) -> bytes:
     """Renderiza a figura do diagnóstico (fontes individuais + concordância)."""
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    from src.data.raster_utils import render_figure
 
     names = list(mask_set.masks)
     others = [name for name in names if name != reference]
@@ -203,17 +199,16 @@ def render_comparison_figure(mask_set: MaskSet, reference: str) -> bytes:
     other_mask = display_array(mask_set.masks[other])
     agreement = display_array(agreement_labels(mask_set.masks[reference], mask_set.masks[other]))
 
-    figure, axes = plt.subplots(1, 3, figsize=(16, 6))
-    _plot_mask(axes[0], reference_mask, reference)
-    _plot_mask(axes[1], other_mask, other)
-    _plot_agreement(axes[2], agreement, reference, other)
-    figure.suptitle("Comparação das máscaras de café por fonte de ground truth", fontsize=13)
-    figure.tight_layout(rect=(0, 0, 1, 0.94))
+    def _build(plt: Any) -> Any:
+        figure, axes = plt.subplots(1, 3, figsize=(16, 6))
+        _plot_mask(axes[0], reference_mask, reference)
+        _plot_mask(axes[1], other_mask, other)
+        _plot_agreement(axes[2], agreement, reference, other)
+        figure.suptitle("Comparação das máscaras de café por fonte de ground truth", fontsize=13)
+        figure.tight_layout(rect=(0, 0, 1, 0.94))
+        return figure
 
-    buffer = stdlib_io.BytesIO()
-    figure.savefig(buffer, format="png", dpi=110)
-    plt.close(figure)
-    return buffer.getvalue()
+    return render_figure(_build)
 
 
 def agreement_labels(reference_mask: np.ndarray, other_mask: np.ndarray) -> np.ndarray:

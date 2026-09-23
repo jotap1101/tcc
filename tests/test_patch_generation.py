@@ -12,11 +12,14 @@ from src.data.patch_generation import (
     generate_patches,
     grid_dims,
     image_patches_dir,
+    load_manifest,
+    manifest_has_folds,
     manifest_path,
     patch_bbox,
     patch_fingerprint_hash,
     patch_id,
     patch_montage_file_name,
+    require_manifest,
     save_patch_montage,
     verify_manifest,
 )
@@ -102,6 +105,38 @@ def test_manifest_path_points_to_processed(tmp_path) -> None:
     target = manifest_path(paths)
     assert target.parent == paths["data_processed"]
     assert target.suffix == ".parquet"
+
+
+def test_require_manifest_raises_when_absent(tmp_path) -> None:
+    """require_manifest deve falhar quando o manifesto do estágio 06 está ausente."""
+    paths = _storage_paths(tmp_path)
+    with pytest.raises(FileNotFoundError):
+        require_manifest(paths)
+
+
+def test_load_manifest_reads_and_validates(tmp_path, monkeypatch) -> None:
+    """load_manifest deve ler o manifesto persistido e falhar se vazio."""
+    import pandas as pd
+
+    monkeypatch.setattr("src.io.detect_platform", lambda: "local")
+    paths = _storage_paths(tmp_path)
+    manifest_file = manifest_path(paths)
+    manifest_file.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"patch_id": ["p1"]}).to_parquet(manifest_file, index=False)
+    assert len(load_manifest(paths)) == 1
+
+    pd.DataFrame(columns=["patch_id"]).to_parquet(manifest_file, index=False)
+    with pytest.raises(ValueError):
+        load_manifest(paths)
+
+
+def test_manifest_has_folds() -> None:
+    """manifest_has_folds deve indicar a presença de fold sem valores nulos."""
+    import pandas as pd
+
+    assert manifest_has_folds(pd.DataFrame({"fold": [0, 1, 2]}))
+    assert not manifest_has_folds(pd.DataFrame({"fold": [0, None]}))
+    assert not manifest_has_folds(pd.DataFrame({"patch_id": ["p1"]}))
 
 
 def test_patch_id_is_deterministic() -> None:

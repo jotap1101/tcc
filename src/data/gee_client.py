@@ -171,6 +171,74 @@ def mosaic_file_name(region_code: str, start: str, end: str) -> str:
     return f"sentinel2_{region_code}_{start}_{end}"
 
 
+def ensure_mosaic_export(mosaic: Any, storage_paths: dict[str, Path]) -> tuple[Path, bool]:
+    """Garante o mosaico Sentinel-2 exportado no caminho canônico (idempotente).
+
+    Reutiliza o GeoTIFF já existente; caso contrário, exporta para uma pasta
+    única na raiz do Drive (limitação do GEE) e realoca ao caminho canônico.
+    Retorna (caminho canônico, exportado nesta execução).
+    """
+    from src import io
+    from src.data.preprocessing import mosaic_path
+
+    config = get_config()
+    target_path = mosaic_path(storage_paths)
+    file_prefix = target_path.stem
+    staging_folder = config["storage"]["drive_root"]
+
+    # Verifica existência no caminho canônico antes de exportar (idempotência entre execuções).
+    if io.path_exists(target_path):
+        print(f"Mosaico já exportado: {target_path}")
+        return target_path, False
+
+    # GEE só aceita nome de pasta única (sem '/'); exporta e realoca depois.
+    task = export_mosaic_to_drive(
+        mosaic=mosaic,
+        description=f"sentinel2_{config['aoi']['region_code']}",
+        folder=staging_folder,
+        file_name_prefix=file_prefix,
+    )
+    print(f"Tarefa de exportação iniciada: {task.id}")
+    wait_for_task(task)
+    io.relocate_exported_file(
+        file_name=f"{file_prefix}.tif",
+        staging_folder=staging_folder,
+        target_path=target_path,
+    )
+    print(f"Mosaico exportado em: {target_path}")
+    return target_path, True
+
+
+def save_mosaic_preview(mosaic: Any, storage_paths: dict[str, Path]) -> Path:
+    """Salva a miniatura RGB do mosaico via Earth Engine (idempotente).
+
+    O nome da figura é derivado da configuração; reutiliza a figura já existente
+    em execuções repetidas.
+    """
+    import urllib.request
+
+    from src import io
+
+    config = get_config()
+    file_prefix = mosaic_file_name(
+        config["aoi"]["region_code"],
+        config["data"]["dates"]["start"],
+        config["data"]["dates"]["end"],
+    )
+    figure_path = storage_paths["artifacts_figures"] / f"{file_prefix}_preview.png"
+    if io.path_exists(figure_path):
+        print(f"Figura já existente: {figure_path}")
+        return figure_path
+
+    rgb = mosaic.select(["B4", "B3", "B2"])
+    thumb_url = rgb.getThumbURL(
+        {"min": 0, "max": 3000, "bands": ["B4", "B3", "B2"], "dimensions": 1024}
+    )
+    io.persist_bytes(figure_path, urllib.request.urlopen(thumb_url).read())
+    print(f"Figura salva em: {figure_path}")
+    return figure_path
+
+
 def drive_relative_path(path: Path) -> str:
     """Retorna o caminho relativo à raiz MyDrive (pasta de exportação no GEE)."""
     from src import io

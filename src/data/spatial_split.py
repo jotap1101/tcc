@@ -24,7 +24,12 @@ import pandas as pd
 
 from src.config import get_config
 from src.data.mask_utils import reference_year
-from src.data.patch_generation import manifest_path, patch_fingerprint_hash
+from src.data.patch_generation import (
+    load_manifest,
+    manifest_path,
+    patch_fingerprint_hash,
+    require_manifest,
+)
 
 SPLIT_SCHEMA_VERSION = 1
 
@@ -120,26 +125,6 @@ def split_meta_payload(storage_paths: dict[str, Path]) -> dict[str, Any]:
     }
 
 
-def _load_manifest(storage_paths: dict[str, Path]) -> pd.DataFrame:
-    """Carrega o manifesto persistido e valida que não está vazio."""
-    from src import io
-
-    local_manifest = io.ensure_local_copy(manifest_path(storage_paths))
-    manifest = pd.read_parquet(local_manifest)
-    if manifest.empty:
-        raise ValueError("Manifesto vazio; execute o estágio 06 antes.")
-    return manifest
-
-
-def _require_manifest(storage_paths: dict[str, Path]) -> None:
-    """Falha com mensagem clara quando o manifesto do estágio 06 está ausente."""
-    from src import io
-
-    manifest = manifest_path(storage_paths)
-    if not io.path_exists(manifest):
-        raise FileNotFoundError(f"Manifesto do estágio 06 não encontrado: {manifest}")
-
-
 def split_is_current(storage_paths: dict[str, Path]) -> bool:
     """Indica se a divisão persistida está vigente frente às entradas atuais."""
     from src import io
@@ -156,25 +141,23 @@ def split_is_current(storage_paths: dict[str, Path]) -> bool:
     current = split_meta_payload(storage_paths)
     if any(stored.get(key) != value for key, value in current.items()):
         return False
-    return bool(_load_manifest(storage_paths)["fold"].notna().all())
+    return bool(load_manifest(storage_paths)["fold"].notna().all())
 
 
 def _write_manifest(path: Path, manifest: pd.DataFrame, storage_paths: dict[str, Path]) -> None:
     """Persiste o manifesto (com a coluna fold) no Drive canônico."""
     from src import io
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    manifest.to_parquet(path, index=False)
-    io.persist_file(path, path)
+    buffer = stdlib_io.BytesIO()
+    manifest.to_parquet(buffer, index=False)
+    io.persist_bytes(path, buffer.getvalue())
 
 
 def _write_meta(path: Path, payload: dict[str, Any], storage_paths: dict[str, Path]) -> None:
     """Persiste o metadata da divisão no Drive canônico."""
     from src import io
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    io.persist_file(path, path)
+    io.persist_bytes(path, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
 
 
 def assign_spatial_folds(storage_paths: dict[str, Path]) -> Path:
@@ -190,8 +173,8 @@ def assign_spatial_folds(storage_paths: dict[str, Path]) -> Path:
         print(f"Divisão já existente e atual (reutilizada): {manifest_file}")
         return manifest_file
 
-    _require_manifest(storage_paths)
-    manifest = _load_manifest(storage_paths)
+    require_manifest(storage_paths)
+    manifest = load_manifest(storage_paths)
     k = fold_count()
     seed = split_seed()
     centroids = np.array([bbox_centroid(value) for value in manifest["bbox"]])
@@ -204,7 +187,7 @@ def assign_spatial_folds(storage_paths: dict[str, Path]) -> Path:
 
 def verify_split(storage_paths: dict[str, Path]) -> dict[str, Any]:
     """Verifica a divisão: contagens, café e localização média por dobra."""
-    manifest = _load_manifest(storage_paths)
+    manifest = load_manifest(storage_paths)
     k = fold_count()
     per_fold = []
     for fold in range(k):
@@ -242,7 +225,7 @@ def save_split_figure(storage_paths: dict[str, Path]) -> Path:
         print(f"Figura já existente (reutilizada): {figure_path}")
         return figure_path
 
-    manifest = _load_manifest(storage_paths)
+    manifest = load_manifest(storage_paths)
     io.persist_bytes(figure_path, render_split_figure(manifest))
     print(f"Figura salva em: {figure_path}")
     return figure_path
@@ -250,23 +233,21 @@ def save_split_figure(storage_paths: dict[str, Path]) -> Path:
 
 def render_split_figure(manifest: pd.DataFrame) -> bytes:
     """Renderiza o mapa de centroides dos patches coloridos por dobra."""
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    from src.data.raster_utils import render_figure
 
     centroids = np.array([bbox_centroid(value) for value in manifest["bbox"]])
     folds = manifest["fold"].astype(int)
 
-    figure, axis = plt.subplots(figsize=(8, 8))
-    scatter = axis.scatter(centroids[:, 0], centroids[:, 1], c=folds, cmap="tab10", s=12, alpha=0.8)
-    axis.set_title(f"Divisão espacial k-fold (k={int(folds.max()) + 1})")
-    axis.set_xlabel("Easting (m)")
-    axis.set_ylabel("Northing (m)")
-    figure.colorbar(scatter, ax=axis, label="Dobra")
-    figure.tight_layout()
+    def _build(plt: Any) -> Any:
+        figure, axis = plt.subplots(figsize=(8, 8))
+        scatter = axis.scatter(
+            centroids[:, 0], centroids[:, 1], c=folds, cmap="tab10", s=12, alpha=0.8
+        )
+        axis.set_title(f"Divisão espacial k-fold (k={int(folds.max()) + 1})")
+        axis.set_xlabel("Easting (m)")
+        axis.set_ylabel("Northing (m)")
+        figure.colorbar(scatter, ax=axis, label="Dobra")
+        figure.tight_layout()
+        return figure
 
-    buffer = stdlib_io.BytesIO()
-    figure.savefig(buffer, format="png", dpi=110)
-    plt.close(figure)
-    return buffer.getvalue()
+    return render_figure(_build)

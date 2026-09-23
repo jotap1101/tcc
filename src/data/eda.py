@@ -11,7 +11,6 @@ arquivos) e gera a figura de resumo em artifacts/figures/.
 
 from __future__ import annotations
 
-import io as stdlib_io
 import json
 from pathlib import Path
 from typing import Any
@@ -22,8 +21,9 @@ import pandas as pd
 from src.config import get_config
 from src.data.mask_utils import reference_year
 from src.data.patch_generation import (
-    manifest_path,
+    load_manifest,
     patch_fingerprint_hash,
+    require_manifest,
     resolve_from_root,
 )
 
@@ -51,26 +51,6 @@ def _stats_fingerprint(storage_paths: dict[str, Path]) -> dict[str, Any]:
         "bands": list(config["data"]["bands"]),
         "fingerprint_hash": patch_fingerprint_hash(storage_paths),
     }
-
-
-def _require_manifest(storage_paths: dict[str, Path]) -> None:
-    """Falha com mensagem clara quando o manifesto do estágio 06 está ausente."""
-    from src import io
-
-    manifest = manifest_path(storage_paths)
-    if not io.path_exists(manifest):
-        raise FileNotFoundError(f"Manifesto do estágio 06 não encontrado: {manifest}")
-
-
-def _load_manifest(storage_paths: dict[str, Path]) -> pd.DataFrame:
-    """Carrega o manifesto persistido e valida que não está vazio."""
-    from src import io
-
-    local_manifest = io.ensure_local_copy(manifest_path(storage_paths))
-    manifest = pd.read_parquet(local_manifest)
-    if manifest.empty:
-        raise ValueError("Manifesto vazio; execute o estágio 06 antes.")
-    return manifest
 
 
 def _deterministic_sample(manifest: pd.DataFrame, size: int) -> pd.DataFrame:
@@ -116,8 +96,8 @@ def compute_normalization_stats(
         local_stats = io.ensure_local_copy(stats_path)
         return json.loads(local_stats.read_text(encoding="utf-8"))
 
-    _require_manifest(storage_paths)
-    manifest = _load_manifest(storage_paths)
+    require_manifest(storage_paths)
+    manifest = load_manifest(storage_paths)
     config = get_config()
     bands = list(config["data"]["bands"])
     n_bands = len(bands)
@@ -179,8 +159,8 @@ def run_sanity_checks(
     """
     from src import io
 
-    _require_manifest(storage_paths)
-    manifest = _load_manifest(storage_paths)
+    require_manifest(storage_paths)
+    manifest = load_manifest(storage_paths)
     config = get_config()
     bands = list(config["data"]["bands"])
     patch_size = int(config["data"]["patch_size"])
@@ -267,7 +247,7 @@ def save_eda_figure(storage_paths: dict[str, Path]) -> Path:
         print(f"Figura já existente (reutilizada): {figure_path}")
         return figure_path
 
-    manifest = _load_manifest(storage_paths)
+    manifest = load_manifest(storage_paths)
     stats = compute_normalization_stats(storage_paths)
     io.persist_bytes(figure_path, render_eda_figure(manifest, stats, storage_paths))
     print(f"Figura salva em: {figure_path}")
@@ -280,68 +260,63 @@ def render_eda_figure(
     storage_paths: dict[str, Path],
 ) -> bytes:
     """Renderiza a figura de resumo: café, dobras, média±desvio e histogramas."""
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
     from src import io
+    from src.data.raster_utils import render_figure
 
     bands = list(get_config()["data"]["bands"])
     sample = _deterministic_sample(manifest, SANITY_SAMPLE_SIZE)
     per_band = stats["per_band"]
 
-    figure, axes = plt.subplots(2, 2, figsize=(14, 10))
-    axes[0, 0].hist(manifest["coffee_ratio"], bins=20, color="#7b1fa2", alpha=0.8)
-    axes[0, 0].set_title("Distribuição da proporção de café por patch")
-    axes[0, 0].set_xlabel("coffee_ratio")
-    axes[0, 0].set_ylabel("patches")
+    def _build(plt: Any) -> Any:
+        figure, axes = plt.subplots(2, 2, figsize=(14, 10))
+        axes[0, 0].hist(manifest["coffee_ratio"], bins=20, color="#7b1fa2", alpha=0.8)
+        axes[0, 0].set_title("Distribuição da proporção de café por patch")
+        axes[0, 0].set_xlabel("coffee_ratio")
+        axes[0, 0].set_ylabel("patches")
 
-    if "fold" in manifest.columns and manifest["fold"].notna().any():
-        counts = manifest["fold"].value_counts().sort_index()
-        axes[0, 1].bar(
-            [str(int(fold)) for fold in counts.index],
-            counts.values,
-            color="#2e7d32",
-        )
-        axes[0, 1].set_title("Balanceamento por dobra (k-fold)")
-        axes[0, 1].set_xlabel("dobra")
-        axes[0, 1].set_ylabel("patches")
-    else:
-        axes[0, 1].text(0.5, 0.5, "coluna fold ausente", ha="center", va="center")
-        axes[0, 1].set_axis_off()
-
-    band_names = list(per_band)
-    x = np.arange(len(band_names))
-    means = [per_band[band]["mean"] or 0.0 for band in band_names]
-    stds = [per_band[band]["std"] or 0.0 for band in band_names]
-    axes[1, 0].bar(x, means, yerr=stds, capsize=4, color="#1565c0", alpha=0.85)
-    axes[1, 0].set_xticks(x, band_names)
-    axes[1, 0].set_title("Média ± desvio padrão por banda")
-    axes[1, 0].set_ylabel("reflectância")
-
-    for index, band in enumerate(bands):
-        values: list[np.ndarray] = []
-        for record in sample.itertuples():
-            image = np.load(
-                io.ensure_local_copy(resolve_from_root(str(record.image_path), storage_paths))
+        if "fold" in manifest.columns and manifest["fold"].notna().any():
+            counts = manifest["fold"].value_counts().sort_index()
+            axes[0, 1].bar(
+                [str(int(fold)) for fold in counts.index],
+                counts.values,
+                color="#2e7d32",
             )
-            band_values = image[index]
-            values.append(band_values[np.isfinite(band_values)])
-        if values:
-            axes[1, 1].hist(
-                np.concatenate(values),
-                bins=HIST_BINS,
-                alpha=0.5,
-                label=band,
-            )
-    axes[1, 1].legend()
-    axes[1, 1].set_title("Histograma de reflectância por banda (amostra)")
+            axes[0, 1].set_title("Balanceamento por dobra (k-fold)")
+            axes[0, 1].set_xlabel("dobra")
+            axes[0, 1].set_ylabel("patches")
+        else:
+            axes[0, 1].text(0.5, 0.5, "coluna fold ausente", ha="center", va="center")
+            axes[0, 1].set_axis_off()
 
-    figure.suptitle("Análise exploratória do dataset de patches", fontsize=13)
-    figure.tight_layout(rect=(0, 0, 1, 0.97))
+        band_names = list(per_band)
+        x = np.arange(len(band_names))
+        means = [per_band[band]["mean"] or 0.0 for band in band_names]
+        stds = [per_band[band]["std"] or 0.0 for band in band_names]
+        axes[1, 0].bar(x, means, yerr=stds, capsize=4, color="#1565c0", alpha=0.85)
+        axes[1, 0].set_xticks(x, band_names)
+        axes[1, 0].set_title("Média ± desvio padrão por banda")
+        axes[1, 0].set_ylabel("reflectância")
 
-    buffer = stdlib_io.BytesIO()
-    figure.savefig(buffer, format="png", dpi=110)
-    plt.close(figure)
-    return buffer.getvalue()
+        for index, band in enumerate(bands):
+            values: list[np.ndarray] = []
+            for record in sample.itertuples():
+                image = np.load(
+                    io.ensure_local_copy(resolve_from_root(str(record.image_path), storage_paths))
+                )
+                band_values = image[index]
+                values.append(band_values[np.isfinite(band_values)])
+            if values:
+                axes[1, 1].hist(
+                    np.concatenate(values),
+                    bins=HIST_BINS,
+                    alpha=0.5,
+                    label=band,
+                )
+        axes[1, 1].legend()
+        axes[1, 1].set_title("Histograma de reflectância por banda (amostra)")
+
+        figure.suptitle("Análise exploratória do dataset de patches", fontsize=13)
+        figure.tight_layout(rect=(0, 0, 1, 0.97))
+        return figure
+
+    return render_figure(_build)

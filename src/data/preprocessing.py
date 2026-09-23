@@ -12,7 +12,6 @@ reutilizam o composite e a figura existentes.
 
 from __future__ import annotations
 
-import io as stdlib_io
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -22,6 +21,7 @@ import numpy as np
 from src.config import get_config
 from src.data.mask_comparison import display_array
 from src.data.mask_utils import reference_year
+from src.data.raster_utils import percentile_stretch, render_figure, same_grid
 
 REFLECTANCE_SCALE = 1e-4  # fator de escala das bandas de reflectância do Sentinel-2
 
@@ -71,7 +71,7 @@ def load_aligned_mosaic(mosaic_path: Path, mask_path: Path) -> AlignedComposite:
 
     with rasterio.open(mosaic_path) as mosaic, rasterio.open(mask_path) as mask:
         bands = int(mosaic.count)
-        if _same_grid(mosaic, mask):
+        if same_grid(mosaic, mask):
             array = mosaic.read().astype(np.float32)
             aligned = True
         else:
@@ -79,16 +79,6 @@ def load_aligned_mosaic(mosaic_path: Path, mask_path: Path) -> AlignedComposite:
             aligned = False
         profile = _composite_profile(mask, bands)
     return AlignedComposite(array=array, profile=profile, aligned=aligned)
-
-
-def _same_grid(mosaic: Any, mask: Any) -> bool:
-    """Indica se o mosaico e a máscara compartilham CRS, transform e dimensões."""
-    return (
-        mosaic.height == mask.height
-        and mosaic.width == mask.width
-        and mosaic.transform == mask.transform
-        and mosaic.crs == mask.crs
-    )
 
 
 def _reproject_to_grid(mosaic: Any, mask: Any) -> np.ndarray:
@@ -201,12 +191,7 @@ def verify_composite(storage_paths: dict[str, Path]) -> dict[str, Any]:
         crs = str(composite.crs)
         bands = int(composite.count)
         nodata = composite.nodata
-        aligned = (
-            composite.height == mask.height
-            and composite.width == mask.width
-            and composite.transform == mask.transform
-            and composite.crs == mask.crs
-        )
+        aligned = same_grid(composite, mask)
         array = composite.read()
         finite = array[np.isfinite(array)]
         value_range: list[float | None] = (
@@ -245,41 +230,24 @@ def save_composite_preview(storage_paths: dict[str, Path]) -> Path:
 
 def render_composite_preview(composite_path: Path) -> bytes:
     """Renderiza a miniatura RGB do composite (B4, B3, B2) com realce por percentil."""
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
     import rasterio
 
     with rasterio.open(composite_path) as src:
         data = src.read()
     band_index = {name: i for i, name in enumerate(get_config()["data"]["bands"])}
-    red = _percentile_stretch(data[band_index["B4"]])
-    green = _percentile_stretch(data[band_index["B3"]])
-    blue = _percentile_stretch(data[band_index["B2"]])
+    red = percentile_stretch(data[band_index["B4"]])
+    green = percentile_stretch(data[band_index["B3"]])
+    blue = percentile_stretch(data[band_index["B2"]])
     # Reduz cada banda (2D) antes de compor o RGB (display_array exige arrays 2D).
     rgb = np.stack([display_array(red), display_array(green), display_array(blue)], axis=-1)
 
-    figure, axis = plt.subplots(figsize=(8, 8))
-    axis.imshow(rgb)
-    axis.set_title("Composite normalizado (RGB: B4, B3, B2)")
-    axis.set_xticks([])
-    axis.set_yticks([])
-    figure.tight_layout()
+    def _build(plt: Any) -> Any:
+        figure, axis = plt.subplots(figsize=(8, 8))
+        axis.imshow(rgb)
+        axis.set_title("Composite normalizado (RGB: B4, B3, B2)")
+        axis.set_xticks([])
+        axis.set_yticks([])
+        figure.tight_layout()
+        return figure
 
-    buffer = stdlib_io.BytesIO()
-    figure.savefig(buffer, format="png", dpi=110)
-    plt.close(figure)
-    return buffer.getvalue()
-
-
-def _percentile_stretch(band: np.ndarray, low: int = 2, high: int = 98) -> np.ndarray:
-    """Realça uma banda contínua pelo estiramento de percentis para [0, 255]."""
-    finite = band[np.isfinite(band)]
-    if finite.size == 0:
-        return np.zeros(band.shape, dtype=np.uint8)
-    p_low, p_high = np.percentile(finite, [low, high])
-    if p_high <= p_low:
-        p_high = p_low + 1e-6
-    stretched = np.clip((band - p_low) / (p_high - p_low), 0.0, 1.0)
-    return (stretched * 255).astype(np.uint8)
+    return render_figure(_build)

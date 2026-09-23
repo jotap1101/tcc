@@ -24,17 +24,11 @@ KAGGLE_DRIVE_CACHE = Path("/kaggle/working/drive")
 def detect_platform() -> str:
     """Identifica a plataforma de execução: 'colab', 'kaggle' ou 'local'.
 
-    A variável do Kaggle é verificada ANTES do google.colab, pois o pacote
-    google-colab também está instalado em kernels do Kaggle.
+    A implementação é única em `src.bootstrap` (executada antes do import de
+    `src`); esta função delega para ela, mantendo o ponto de acesso usado pelos
+    notebooks e pelos módulos de `src`.
     """
-    if os.getenv("KAGGLE_KERNEL_RUN_TYPE"):
-        return "kaggle"
-    try:
-        import google.colab  # noqa: F401
-
-        return "colab"
-    except Exception:
-        return "local"
+    return bootstrap.detect_platform()
 
 
 class DriveClient:
@@ -377,6 +371,8 @@ def sync_repo_to_workspace(workspace: Path) -> Path:
         _copy_mirror_to_workspace(workspace)
     else:
         bootstrap.bootstrap_workspace(workspace)
+    # Remove módulos src.* em cache para forçar a versão recém-copiada/baixada.
+    bootstrap._purge_src_modules()
     if str(workspace) not in sys.path:
         sys.path.insert(0, str(workspace))
     return workspace / "src"

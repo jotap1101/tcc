@@ -1,10 +1,11 @@
-"""Utilidades de reprodutibilidade e autenticação."""
+"""Utilidades de reprodutibilidade, autenticação e apoio aos notebooks."""
 
 from __future__ import annotations
 
 import os
 import random
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import torch
@@ -36,6 +37,50 @@ def set_deterministic_flags() -> None:
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     torch.use_deterministic_algorithms(True)
+
+
+def setup_reproducibility(config: dict[str, Any]) -> None:
+    """Fixa sementes e flags determinísticas a partir da configuração."""
+    seed = int(config["reproducibility"]["seed"])
+    set_all_seeds(seed)
+    set_deterministic_flags()
+    print(f"Seed fixada: {seed}")
+
+
+def log_environment(
+    packages: tuple[str, ...] = (
+        "torch",
+        "transformers",
+        "numpy",
+        "pandas",
+        "earthengine-api",
+    ),
+) -> None:
+    """Registra as versões dos pacotes principais do runtime."""
+    import importlib.metadata
+
+    for pkg in packages:
+        try:
+            print(f"{pkg}: {importlib.metadata.version(pkg)}")
+        except importlib.metadata.PackageNotFoundError:
+            print(f"{pkg}: não instalado")
+
+
+def check_dependencies(dependencies: dict[str, Path]) -> None:
+    """Verifica a existência de dependências de estágios anteriores (falha se ausente)."""
+    from src import io
+
+    for name, path in dependencies.items():
+        if not io.path_exists(path):
+            raise FileNotFoundError(f"Dependência não encontrada: {path}")
+        print(f"Disponível: {name}: {path}")
+
+
+def print_summary(summary: dict[str, Any], stage: str) -> None:
+    """Imprime o resumo da etapa e a mensagem de conclusão."""
+    for key, value in summary.items():
+        print(f"{key}: {value}")
+    print(f"Estágio {stage} concluído.")
 
 
 def authenticate_gee() -> None:
