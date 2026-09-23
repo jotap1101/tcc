@@ -144,7 +144,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 
 ### Phase 4 — Training
 
-- [ ] `09_train_unet.ipynb`
+- [x] `09_train_unet.ipynb` — treino do U-Net com o protocolo único (`src/trainer.train_fold`): perda multivariada, Adam + cosine annealing, dobras 0..4, pesos `models/unet/fold_i.pt`, métricas e histórico por dobra + metadata de execução
 - [ ] `10_train_segformer.ipynb`
 
 ### Phase 5 — Evaluation
@@ -165,7 +165,7 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 ### Shared package (`src/`) — built alongside the phases
 
 - [x] `config.py` + `config.yaml`
-- [ ] `data/dataset.py`, `data/augmentations.py`
+- [x] `data/dataset.py` (dataset de patches, normalização, divisão por dobra e carregadores — estágio 09), `data/augmentations.py` (aumentações geométricas determinísticas por época)
 - [x] `data/patch_generation.py` (patches 512x512 + manifesto Parquet — estágio 06)
 - [x] `data/mask_utils.py` (uma função por fonte de ground truth), `data/gee_client.py`
 - [x] `data/mask_comparison.py` (diagnóstico comparativo das fontes — estágio 03)
@@ -173,10 +173,11 @@ Each notebook is an isolated stage with a single responsibility and declared inp
 - [x] `data/preprocessing.py` (alinhamento e normalização do composite — estágio 05)
 - [x] `data/spatial_split.py` (divisão espacial k-fold do manifesto — estágio 07)
 - [x] `data/eda.py` (estatísticas de normalização + sanidade do dataset — estágio 08)
-- [ ] `losses.py` (Dice + Focal + Boundary)
-- [ ] `metrics.py` (IoU, F1, Precision, Recall)
-- [ ] `trainer.py` (protocolo de treino único, parametrizado pelo modelo — sem duplicação entre notebooks 09/10)
-- [ ] `models/unet.py`, `models/segformer.py`
+- [x] `losses.py` (Dice + Focal + Boundary, com pesos de config.yaml)
+- [x] `metrics.py` (IoU, F1, Precision, Recall com acumulador por época)
+- [x] `trainer.py` (protocolo de treino único, parametrizado pelo modelo — sem duplicação entre notebooks 09/10)
+- [x] `models/unet.py`
+- [ ] `models/segformer.py`
 - [ ] `xai/gradcam.py`, `xai/attention_rollout.py`
 - [x] `io.py` (platform detection + Drive mount + `tcc/` root ensure/resolve + `src/` delivery via espelho), `bootstrap.py` (entrega do `src/` ao runtime antes do import), `utils.py`
 - [x] `tests/` (config, io, utils — pytest)

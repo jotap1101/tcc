@@ -234,8 +234,8 @@ __marimo__/
 data/*
 !data/external/
 !data/external/**
-models/
-artifacts/
+/models/
+/artifacts/
 *.tif
 *.tiff
 *.npz

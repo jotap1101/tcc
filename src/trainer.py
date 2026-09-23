@@ -1,0 +1,305 @@
+"""Protocolo de treino único compartilhado pelos estágios 09 e 10.
+
+Um único `train_fold()` executa a validação cruzada espacial (k = `splits.fold_count`)
+com o mesmo protocolo para U-Net (estágio 09) e SegFormer (estágio 10): mesma
+perda multivariada (Dice + Focal + Boundary), otimizador Adam, scheduler
+cosine annealing, sementes por dobra e métricas de pixel. Somente a arquitetura
+diverge — garantia da comparação científica justa. Os artefatos por dobra
+(pesos, métricas e histórico) são persistidos no Drive canônico e reutilizados
+em reexecuções (idempotência), com metadata de execução em artifacts/runs/.
+"""
+
+from __future__ import annotations
+
+import io as stdlib_io
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import torch
+from torch import nn
+
+from src.config import get_config
+from src.data.augmentations import SegmentAugmentation
+from src.data.dataset import build_loaders
+from src.losses import SegmentationLoss
+from src.metrics import SegmentationMetrics
+from src.utils import set_all_seeds
+
+
+@dataclass(frozen=True)
+class FoldResult:
+    """Resumo do treino de uma dobra (ou do reaproveitamento de uma já treinada)."""
+
+    model: str
+    fold: int
+    weights_path: Path
+    metrics_path: Path
+    history_path: Path
+    best_epoch: int
+    train_metrics: dict[str, float]
+    val_metrics: dict[str, float]
+    epochs: int
+    skipped: bool
+
+
+def weights_path(storage_paths: dict[str, Path], model_name: str, fold: int) -> Path:
+    """Caminho canônico dos pesos do modelo em uma dobra."""
+    return storage_paths["models"] / model_name / f"fold_{fold}.pt"
+
+
+def metrics_path(storage_paths: dict[str, Path], model_name: str, fold: int) -> Path:
+    """Caminho canônico das métricas de validação em uma dobra."""
+    return storage_paths["artifacts_metrics"] / model_name / f"fold_{fold}.json"
+
+
+def history_path(storage_paths: dict[str, Path], model_name: str, fold: int) -> Path:
+    """Caminho canônico do histórico de treino (loss e métricas por época)."""
+    return storage_paths["artifacts_runs"] / model_name / f"fold_{fold}.json"
+
+
+def fold_training_done(storage_paths: dict[str, Path], model_name: str, fold: int) -> bool:
+    """Indica se os três artefatos de uma dobra já existem (idempotência)."""
+    from src import io
+
+    return all(
+        io.path_exists(path)
+        for path in (
+            weights_path(storage_paths, model_name, fold),
+            metrics_path(storage_paths, model_name, fold),
+            history_path(storage_paths, model_name, fold),
+        )
+    )
+
+
+def _persist_json(path: Path, payload: dict[str, Any]) -> None:
+    """Persiste um dicionário como JSON no Drive canônico."""
+    from src import io
+
+    io.persist_bytes(path, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
+
+
+def _persist_weights(path: Path, state_dict: dict[str, torch.Tensor]) -> None:
+    """Persiste o state dict do modelo no Drive canônico (via buffer em memória)."""
+    from src import io
+
+    buffer = stdlib_io.BytesIO()
+    torch.save(state_dict, buffer)
+    io.persist_bytes(path, buffer.getvalue())
+
+
+def _run_epoch(
+    loader: Any,
+    model: nn.Module,
+    loss_fn: SegmentationLoss,
+    optimizer: torch.optim.Optimizer | None,
+    device: torch.device,
+    training: bool,
+) -> dict[str, float]:
+    """Executa uma época (treino ou validação) e retorna loss e métricas médias."""
+    model.train(training)
+    metrics = SegmentationMetrics()
+    sums = {"total": 0.0, "dice": 0.0, "focal": 0.0, "boundary": 0.0}
+    batches = 0
+    for images, targets in loader:
+        images = images.to(device)
+        targets = targets.to(device)
+        if training:
+            assert optimizer is not None
+            optimizer.zero_grad()
+            logits = model(images)
+            components = loss_fn(logits, targets)
+            components["total"].backward()
+            optimizer.step()
+        else:
+            with torch.no_grad():
+                logits = model(images)
+                components = loss_fn(logits, targets)
+        for key in sums:
+            sums[key] += float(components[key].detach().cpu())
+        metrics.update(logits.detach(), targets)
+        batches += 1
+    stats = metrics.compute()
+    for key, value in sums.items():
+        stats["loss" if key == "total" else key] = value / max(batches, 1)
+    return stats
+
+
+def train_fold(
+    model: nn.Module,
+    model_name: str,
+    storage_paths: dict[str, Path],
+    fold: int,
+    device: torch.device,
+    force: bool = False,
+) -> FoldResult:
+    """Treina um modelo em uma dobra da validação espacial (protocolo único).
+
+    Reutiliza os artefatos da dobra quando já existem (a menos que ``force``);
+    caso contrário, executa o protocolo completo e persiste pesos, métricas e
+    histórico. A semente por dobra é ``reproducibility.seed + fold`` e, a cada
+    época, as aumentações são reseedadas com ``semente + época``.
+    """
+    from src import io
+
+    config = get_config()
+    training = config["training"]
+    epochs = int(training["epochs"])
+    batch_size = int(training["batch_size"])
+    lr = float(training["lr"])
+    weight_decay = float(training["weight_decay"])
+    num_workers = int(training["num_workers"])
+    fold_seed = int(config["reproducibility"]["seed"]) + fold
+
+    weights_file = weights_path(storage_paths, model_name, fold)
+    metrics_file = metrics_path(storage_paths, model_name, fold)
+    history_file = history_path(storage_paths, model_name, fold)
+
+    if not force and fold_training_done(storage_paths, model_name, fold):
+        saved = json.loads(io.ensure_local_copy(metrics_file).read_text(encoding="utf-8"))
+        print(f"[{model_name}] dobra {fold} já treinada (artefatos reutilizados).")
+        return FoldResult(
+            model=model_name,
+            fold=fold,
+            weights_path=weights_file,
+            metrics_path=metrics_file,
+            history_path=history_file,
+            best_epoch=int(saved["best_epoch"]),
+            train_metrics=saved["train"],
+            val_metrics=saved["val"],
+            epochs=epochs,
+            skipped=True,
+        )
+
+    set_all_seeds(fold_seed)
+    augmentation = SegmentAugmentation(config)
+    train_loader, val_loader = build_loaders(
+        storage_paths,
+        fold,
+        batch_size,
+        fold_seed,
+        num_workers,
+        transform=augmentation,
+    )
+    model.to(device)
+    loss_fn = SegmentationLoss(config).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+
+    best_iou = -1.0
+    best_epoch = 0
+    best_state: dict[str, torch.Tensor] | None = None
+    best_train: dict[str, float] = {}
+    best_val: dict[str, float] = {}
+    history: list[dict[str, Any]] = []
+
+    for epoch in range(epochs):
+        augmentation.set_seed(fold_seed + epoch)
+        train_stats = _run_epoch(train_loader, model, loss_fn, optimizer, device, training=True)
+        scheduler.step()
+        val_stats = _run_epoch(val_loader, model, loss_fn, None, device, training=False)
+        history.append(
+            {
+                "epoch": epoch + 1,
+                "lr": float(optimizer.param_groups[0]["lr"]),
+                **{f"train_{key}": value for key, value in train_stats.items()},
+                **{f"val_{key}": value for key, value in val_stats.items()},
+            }
+        )
+        if val_stats["iou"] > best_iou:
+            best_iou = val_stats["iou"]
+            best_epoch = epoch + 1
+            best_state = {key: value.detach().clone() for key, value in model.state_dict().items()}
+            best_train = dict(train_stats)
+            best_val = dict(val_stats)
+        print(
+            f"[{model_name}] dobra {fold} | época {epoch + 1}/{epochs} | "
+            f"treino iou {train_stats['iou']:.4f} loss {train_stats['loss']:.4f} | "
+            f"val iou {val_stats['iou']:.4f} loss {val_stats['loss']:.4f}"
+        )
+
+    if best_state is None:
+        raise RuntimeError(f"[{model_name}] dobra {fold}: treino sem nenhuma época concluída.")
+    model.load_state_dict(best_state)
+    _persist_weights(weights_file, best_state)
+    _persist_json(
+        metrics_file,
+        {
+            "model": model_name,
+            "fold": fold,
+            "epochs": epochs,
+            "seed": fold_seed,
+            "best_epoch": best_epoch,
+            "train": best_train,
+            "val": best_val,
+        },
+    )
+    _persist_json(
+        history_file,
+        {"model": model_name, "fold": fold, "seed": fold_seed, "epochs": history},
+    )
+    print(
+        f"[{model_name}] dobra {fold} concluída: melhor IoU val {best_iou:.4f} "
+        f"(época {best_epoch})."
+    )
+    print(f"Pesos: {weights_file}")
+    return FoldResult(
+        model=model_name,
+        fold=fold,
+        weights_path=weights_file,
+        metrics_path=metrics_file,
+        history_path=history_file,
+        best_epoch=best_epoch,
+        train_metrics=best_train,
+        val_metrics=best_val,
+        epochs=epochs,
+        skipped=False,
+    )
+
+
+def _package_versions() -> dict[str, str]:
+    """Versões dos pacotes principais do runtime, para o log de reprodutibilidade."""
+    import importlib.metadata
+
+    versions: dict[str, str] = {}
+    for package in ("torch", "torchvision", "transformers", "numpy", "pandas"):
+        try:
+            versions[package] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            versions[package] = "não instalado"
+    return versions
+
+
+def run_metadata(model_name: str, storage_paths: dict[str, Path]) -> dict[str, Any]:
+    """Metadata de reprodutibilidade de uma execução de treino."""
+    from src.data.patch_generation import patch_fingerprint_hash
+    from src.data.spatial_split import fold_count
+
+    config = get_config()
+    training = config["training"]
+    return {
+        "model": model_name,
+        "fold_count": fold_count(),
+        "seed": int(config["reproducibility"]["seed"]),
+        "epochs": int(training["epochs"]),
+        "batch_size": int(training["batch_size"]),
+        "lr": float(training["lr"]),
+        "weight_decay": float(training["weight_decay"]),
+        "num_workers": int(training["num_workers"]),
+        "manifest_fingerprint_hash": patch_fingerprint_hash(storage_paths),
+        "environment": _package_versions(),
+    }
+
+
+def save_run_metadata(storage_paths: dict[str, Path], model_name: str) -> Path:
+    """Persiste o metadata de execução em artifacts/runs/{model}/run.meta.json."""
+    from src import io
+
+    path = storage_paths["artifacts_runs"] / model_name / "run.meta.json"
+    if io.path_exists(path):
+        print(f"Metadata de execução já existente (reutilizado): {path}")
+        return path
+    _persist_json(path, run_metadata(model_name, storage_paths))
+    print(f"Metadata de execução salvo em: {path}")
+    return path
