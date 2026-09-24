@@ -135,7 +135,7 @@ Cada notebook é um estágio isolado com uma única responsabilidade e entradas/
 ### Fase 2 — Ground Truth
 
 - [x] `03_mask_sources_comparison.ipynb`
-- [x] `04_mask_finalization.ipynb` — fonte escolhida (AlphaEarth) → máscara binária final
+- [x] `04_mask_finalization.ipynb`
 
 ### Fase 3 — Pré-processamento e Dataset
 
