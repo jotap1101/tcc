@@ -146,7 +146,7 @@ Cada notebook é um estágio isolado com uma única responsabilidade e entradas/
 
 ### Fase 4 — Treinamento
 
-- [x] `09_train_unet.ipynb` — treino do U-Net com o protocolo único (`src/trainer.train_fold`): perda multivariada, Adam + cosine annealing, dobras 0..4, pesos `models/unet/fold_i.pt`, métricas e histórico por dobra + metadata de execução
+- [ ] `09_train_unet.ipynb` — treino do U-Net com o protocolo único (`src/trainer.train_fold`): perda multivariada, Adam + cosine annealing, dobras 0..4, pesos `models/unet/fold_i.pt`, métricas e histórico por dobra + metadata de execução
 - [ ] `10_train_segformer.ipynb`
 
 ### Fase 5 — Avaliação
