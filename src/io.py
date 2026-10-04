@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -263,12 +264,16 @@ def relocate_exported_file(
     file_name: str,
     staging_folder: str,
     target_path: Path,
+    wait_timeout_seconds: int = 600,
+    poll_interval: int = 10,
 ) -> None:
     """Move um artefato exportado pelo GEE para o caminho canônico.
 
     O GEE exporta para uma única pasta nomeada na raiz do Drive (sem aceitar
     subcaminhos); após a conclusão da tarefa, o arquivo é realocado para o
-    caminho aninhado canônico resolvido do config.yaml.
+    caminho aninhado canônico resolvido do config.yaml. No Colab, a conclusão
+    da task (lado servidor) pode preceder a propagação do FUSE mount, então o
+    arquivo é aguardado (polling) antes de movê-lo.
     """
     if detect_platform() == "kaggle":
         remote_src = f"{staging_folder}/{file_name}"
@@ -276,6 +281,10 @@ def relocate_exported_file(
         get_drive_client().move(remote_src, remote_dst)
         return
     source = mount_drive() / staging_folder / file_name
+    deadline = time.monotonic() + wait_timeout_seconds
+    while not source.is_file() and time.monotonic() < deadline:
+        print(f"  Aguardando arquivo exportado no Drive: {source.name} ...")
+        time.sleep(poll_interval)
     if not source.is_file():
         raise FileNotFoundError(f"Arquivo exportado não encontrado no Drive: {source}")
     target_path.parent.mkdir(parents=True, exist_ok=True)
