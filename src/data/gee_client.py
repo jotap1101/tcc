@@ -171,18 +171,32 @@ def mosaic_file_name(region_code: str, start: str, end: str) -> str:
     return f"sentinel2_{region_code}_{start}_{end}"
 
 
-def ensure_mosaic_export(mosaic: Any, storage_paths: dict[str, Path]) -> tuple[Path, bool]:
+def year_dates(year: int | None) -> tuple[str, str]:
+    """Retorna o intervalo de datas de um ano (ou as datas configuradas por padrão)."""
+    config = get_config()
+    if year is None:
+        return config["data"]["dates"]["start"], config["data"]["dates"]["end"]
+    return f"{year}-01-01", f"{year}-12-31"
+
+
+def ensure_mosaic_export(
+    mosaic: Any,
+    storage_paths: dict[str, Path],
+    year: int | None = None,
+) -> tuple[Path, bool]:
     """Garante o mosaico Sentinel-2 exportado no caminho canônico (idempotente).
 
     Reutiliza o GeoTIFF já existente; caso contrário, exporta para uma pasta
     única na raiz do Drive (limitação do GEE) e realoca ao caminho canônico.
+    O ano opcional permite exportar mosaicos de outros períodos (ex.: 2018).
     Retorna (caminho canônico, exportado nesta execução).
     """
     from src import io
     from src.data.preprocessing import mosaic_path
 
     config = get_config()
-    target_path = mosaic_path(storage_paths)
+    start, end = year_dates(year)
+    target_path = mosaic_path(storage_paths, start, end)
     file_prefix = target_path.stem
     staging_folder = config["storage"]["drive_root"]
 
@@ -194,7 +208,7 @@ def ensure_mosaic_export(mosaic: Any, storage_paths: dict[str, Path]) -> tuple[P
     # GEE só aceita nome de pasta única (sem '/'); exporta e realoca depois.
     task = export_mosaic_to_drive(
         mosaic=mosaic,
-        description=f"sentinel2_{config['aoi']['region_code']}",
+        description=f"sentinel2_{config['aoi']['region_code']}_{start[:4]}",
         folder=staging_folder,
         file_name_prefix=file_prefix,
     )
@@ -209,7 +223,11 @@ def ensure_mosaic_export(mosaic: Any, storage_paths: dict[str, Path]) -> tuple[P
     return target_path, True
 
 
-def save_mosaic_preview(mosaic: Any, storage_paths: dict[str, Path]) -> Path:
+def save_mosaic_preview(
+    mosaic: Any,
+    storage_paths: dict[str, Path],
+    year: int | None = None,
+) -> Path:
     """Salva a miniatura RGB do mosaico via Earth Engine (idempotente).
 
     O nome da figura é derivado da configuração; reutiliza a figura já existente
@@ -220,10 +238,11 @@ def save_mosaic_preview(mosaic: Any, storage_paths: dict[str, Path]) -> Path:
     from src import io
 
     config = get_config()
+    start, end = year_dates(year)
     file_prefix = mosaic_file_name(
         config["aoi"]["region_code"],
-        config["data"]["dates"]["start"],
-        config["data"]["dates"]["end"],
+        start,
+        end,
     )
     figure_path = storage_paths["artifacts_figures"] / f"{file_prefix}_preview.png"
     if io.path_exists(figure_path):

@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from src.config import get_config
-from src.data.mask_utils import reference_year
+from src.data.mask_utils import active_year
 from src.data.patch_generation import (
     load_manifest,
     manifest_path,
@@ -213,7 +213,7 @@ def verify_split(storage_paths: dict[str, Path]) -> dict[str, Any]:
 def split_figure_file_name() -> str:
     """Nome estável da figura da divisão espacial, derivado da configuração."""
     config = get_config()
-    return f"split_kfold_{config['aoi']['region_code']}_{reference_year()}.png"
+    return f"split_kfold_{config['aoi']['region_code']}_{active_year()}.png"
 
 
 def save_split_figure(storage_paths: dict[str, Path]) -> Path:

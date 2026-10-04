@@ -87,6 +87,21 @@ def test_artifact_file_names_derive_from_config() -> None:
     assert config["aoi"]["region_code"] in composite_file_name()
 
 
+def test_composite_file_name_and_path_accept_year(tmp_path) -> None:
+    """O nome e o caminho do composite devem aceitar um ano explícito."""
+    paths = _storage_paths(tmp_path)
+    assert composite_file_name(2018) == "composite_310044_2018"
+    assert composite_path(paths, 2018).name == "composite_310044_2018.tif"
+
+
+def test_mosaic_path_accepts_period(tmp_path) -> None:
+    """O caminho do mosaico deve aceitar um período explícito (ex.: ano da Emater)."""
+    paths = _storage_paths(tmp_path)
+    target = mosaic_path(paths, "2018-01-01", "2018-12-31")
+    assert target.name == "sentinel2_310044_2018-01-01_2018-12-31.tif"
+    assert target.parent == paths["data_raw_sentinel2"]
+
+
 def test_mosaic_path_points_to_raw_sentinel2(tmp_path) -> None:
     """O caminho do mosaico deve apontar para data/raw/sentinel2/."""
     paths = _storage_paths(tmp_path)

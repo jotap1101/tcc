@@ -13,4 +13,4 @@ def test_config_has_storage_block() -> None:
 def test_config_has_ground_truth_sources() -> None:
     """A configuração deve listar as fontes de ground truth (uma subpasta por fonte)."""
     sources = set(get_config()["ground_truth"]["sources"])
-    assert {"mapbiomas", "alphaearth"} <= sources
+    assert {"mapbiomas", "alphaearth", "emater"} <= sources

@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 from src.config import get_config
-from src.data.mask_utils import reference_year
+from src.data.mask_utils import active_year
 from src.data.patch_generation import (
     load_manifest,
     patch_fingerprint_hash,
@@ -40,7 +40,7 @@ def normalization_stats_path(storage_paths: dict[str, Path]) -> Path:
 def eda_figure_file_name() -> str:
     """Nome estável da figura de resumo da EDA, derivado da configuração."""
     config = get_config()
-    return f"eda_summary_{config['aoi']['region_code']}_{reference_year()}.png"
+    return f"eda_summary_{config['aoi']['region_code']}_{active_year()}.png"
 
 
 def _stats_fingerprint(storage_paths: dict[str, Path]) -> dict[str, Any]:

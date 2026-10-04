@@ -23,7 +23,7 @@ import pandas as pd
 
 from src.config import get_config
 from src.data.mask_finalization import chosen_source, final_mask_path
-from src.data.mask_utils import reference_year
+from src.data.mask_utils import active_year
 from src.data.preprocessing import composite_file_name, composite_path
 from src.data.raster_utils import same_grid
 
@@ -129,7 +129,7 @@ def manifest_fingerprint(storage_paths: dict[str, Path]) -> dict[str, Any]:
     return {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "region_code": config["aoi"]["region_code"],
-        "year": reference_year(),
+        "year": active_year(),
         "bands": list(config["data"]["bands"]),
         "patch_size": int(config["data"]["patch_size"]),
         "coffee_min_ratio": float(config["data"]["coffee_min_ratio"]),
@@ -333,7 +333,7 @@ def verify_manifest(storage_paths: dict[str, Path]) -> dict[str, Any]:
 def patch_montage_file_name() -> str:
     """Nome estável da figura do mosaico de amostras, derivado da configuração."""
     config = get_config()
-    return f"patch_montage_{config['aoi']['region_code']}_{reference_year()}.png"
+    return f"patch_montage_{config['aoi']['region_code']}_{active_year()}.png"
 
 
 def save_patch_montage(storage_paths: dict[str, Path]) -> Path:

@@ -37,6 +37,16 @@ ground_truth:
       enabled: true
       collection_id: "projects/forestdatapartnership/assets/coffee/model_2025a"
       probability_threshold: 0.95  # limiar de probabilidade de presença de café
+    emater:
+      # Fonte vetorial (não-GEE): glebas de café do Geoportal do Café (Emater-MG),
+      # mapeamento do parque cafeeiro concluído em 2018, validado em campo. Os
+      # GeoJSONs por município ficam em data/external/emater/ (versionados e
+      # entregues ao runtime pelo bootstrap). O ano (2018) sobrescreve o padrão
+      # global para esta fonte, demandando um mosaico/composite próprio.
+      enabled: true
+      kind: "vector"
+      year: 2018
+      data_dir: "data/external/emater"
     s2dr:
       enabled: false
 

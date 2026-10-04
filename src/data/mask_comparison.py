@@ -97,6 +97,7 @@ def compute_comparison(mask_set: MaskSet, reference: str) -> dict[str, Any]:
     result: dict[str, Any] = {
         "reference_source": reference,
         "sources": names,
+        "years": {name: reference_year(name) for name in names},
         "grid": {
             "shape": list(mask_set.shape),
             "crs": mask_set.crs,

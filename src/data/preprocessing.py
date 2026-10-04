@@ -20,7 +20,7 @@ import numpy as np
 
 from src.config import get_config
 from src.data.mask_comparison import display_array
-from src.data.mask_utils import reference_year
+from src.data.mask_utils import active_year
 from src.data.raster_utils import percentile_stretch, render_figure, same_grid
 
 REFLECTANCE_SCALE = 1e-4  # fator de escala das bandas de reflectância do Sentinel-2
@@ -35,28 +35,34 @@ class AlignedComposite:
     aligned: bool  # True se o grid do mosaico já coincidia com o da máscara
 
 
-def mosaic_path(storage_paths: dict[str, Path]) -> Path:
-    """Caminho canônico do mosaico Sentinel-2 do estágio 01."""
+def mosaic_path(
+    storage_paths: dict[str, Path],
+    start: str | None = None,
+    end: str | None = None,
+) -> Path:
+    """Caminho canônico do mosaico Sentinel-2 do estágio 01 (por período)."""
     from src.data.gee_client import mosaic_file_name
 
     config = get_config()
+    start = start or config["data"]["dates"]["start"]
+    end = end or config["data"]["dates"]["end"]
     prefix = mosaic_file_name(
         config["aoi"]["region_code"],
-        config["data"]["dates"]["start"],
-        config["data"]["dates"]["end"],
+        start,
+        end,
     )
     return storage_paths["data_raw_sentinel2"] / f"{prefix}.tif"
 
 
-def composite_file_name() -> str:
+def composite_file_name(year: int | None = None) -> str:
     """Nome estável do composite normalizado, derivado da configuração."""
     config = get_config()
-    return f"composite_{config['aoi']['region_code']}_{reference_year()}"
+    return f"composite_{config['aoi']['region_code']}_{year or active_year()}"
 
 
-def composite_path(storage_paths: dict[str, Path]) -> Path:
+def composite_path(storage_paths: dict[str, Path], year: int | None = None) -> Path:
     """Caminho canônico do composite normalizado (data/processed/composites/)."""
-    return storage_paths["data_processed_composites"] / f"{composite_file_name()}.tif"
+    return storage_paths["data_processed_composites"] / f"{composite_file_name(year)}.tif"
 
 
 def load_aligned_mosaic(mosaic_path: Path, mask_path: Path) -> AlignedComposite:
@@ -136,22 +142,27 @@ def normalize_reflectance(array: np.ndarray) -> np.ndarray:
     return np.clip(scaled, 0.0, 1.0)
 
 
-def build_preprocessed_composite(storage_paths: dict[str, Path]) -> Path:
+def build_preprocessed_composite(
+    storage_paths: dict[str, Path],
+    year: int | None = None,
+) -> Path:
     """Garante o composite alinhado e normalizado no caminho canônico (idempotente).
 
     Se o composite já existir, é reutilizado; caso contrário, o mosaico do estágio
     01 é alinhado ao grid da máscara final do estágio 04 e normalizado, com o
     GeoTIFF persistido em data/processed/composites/ (streaming no Kaggle).
+    O ano opcional permite gerar composites de outros períodos (ex.: 2018).
     """
     from src import io
     from src.data.mask_finalization import final_mask_path
 
-    target_path = composite_path(storage_paths)
+    target_path = composite_path(storage_paths, year)
     if io.path_exists(target_path):
         print(f"Composite já existente (reutilizado): {target_path}")
         return target_path
 
-    mosaic_local = io.ensure_local_copy(mosaic_path(storage_paths))
+    start, end = _year_dates(year)
+    mosaic_local = io.ensure_local_copy(mosaic_path(storage_paths, start, end))
     mask_local = io.ensure_local_copy(final_mask_path(storage_paths))
     if not mosaic_local.is_file():
         raise FileNotFoundError(f"Mosaico do estágio 01 não encontrado: {mosaic_local}")
@@ -169,6 +180,14 @@ def build_preprocessed_composite(storage_paths: dict[str, Path]) -> Path:
     return target_path
 
 
+def _year_dates(year: int | None) -> tuple[str, str]:
+    """Datas de um ano (ou as configuradas por padrão quando o ano é nulo)."""
+    config = get_config()
+    if year is None:
+        return config["data"]["dates"]["start"], config["data"]["dates"]["end"]
+    return f"{year}-01-01", f"{year}-12-31"
+
+
 def _write_composite(path: Path, array: np.ndarray, profile: dict[str, Any]) -> None:
     """Escreve o composite normalizado em GeoTIFF com o perfil da máscara."""
     import rasterio
@@ -177,14 +196,14 @@ def _write_composite(path: Path, array: np.ndarray, profile: dict[str, Any]) -> 
         dst.write(array)
 
 
-def verify_composite(storage_paths: dict[str, Path]) -> dict[str, Any]:
+def verify_composite(storage_paths: dict[str, Path], year: int | None = None) -> dict[str, Any]:
     """Verifica o composite: grid, CRS, bandas, alinhamento e intervalo de valores."""
     import rasterio
 
     from src import io
     from src.data.mask_finalization import final_mask_path
 
-    composite_local = io.ensure_local_copy(composite_path(storage_paths))
+    composite_local = io.ensure_local_copy(composite_path(storage_paths, year))
     mask_local = io.ensure_local_copy(final_mask_path(storage_paths))
     with rasterio.open(composite_local) as composite, rasterio.open(mask_local) as mask:
         shape = (int(composite.height), int(composite.width))
@@ -207,22 +226,25 @@ def verify_composite(storage_paths: dict[str, Path]) -> dict[str, Any]:
     }
 
 
-def composite_preview_file_name() -> str:
+def composite_preview_file_name(year: int | None = None) -> str:
     """Nome estável da figura do composite, derivado da configuração."""
     config = get_config()
-    return f"composite_{config['aoi']['region_code']}_{reference_year()}.png"
+    return f"composite_{config['aoi']['region_code']}_{year or active_year()}.png"
 
 
-def save_composite_preview(storage_paths: dict[str, Path]) -> Path:
+def save_composite_preview(
+    storage_paths: dict[str, Path],
+    year: int | None = None,
+) -> Path:
     """Persiste a figura do composite no Drive canônico (idempotente)."""
     from src import io
 
-    figure_path = storage_paths["artifacts_figures"] / composite_preview_file_name()
+    figure_path = storage_paths["artifacts_figures"] / composite_preview_file_name(year)
     if io.path_exists(figure_path):
         print(f"Figura já existente (reutilizada): {figure_path}")
         return figure_path
 
-    composite_local = io.ensure_local_copy(composite_path(storage_paths))
+    composite_local = io.ensure_local_copy(composite_path(storage_paths, year))
     io.persist_bytes(figure_path, render_composite_preview(composite_local))
     print(f"Figura salva em: {figure_path}")
     return figure_path

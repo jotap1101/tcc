@@ -17,7 +17,7 @@ import numpy as np
 
 from src.config import get_config
 from src.data.mask_comparison import COFFEE_COLORS, display_array, report_file_name
-from src.data.mask_utils import reference_year, source_mask_path
+from src.data.mask_utils import active_year, reference_year, source_mask_path
 
 
 def chosen_source() -> str:
@@ -35,7 +35,7 @@ def chosen_source() -> str:
 def final_mask_file_name() -> str:
     """Nome estável da máscara binária final, derivado da configuração."""
     config = get_config()
-    return f"mask_final_{config['aoi']['region_code']}_{reference_year()}"
+    return f"mask_final_{config['aoi']['region_code']}_{active_year()}"
 
 
 def final_mask_path(storage_paths: dict[str, Path]) -> Path:
@@ -46,7 +46,7 @@ def final_mask_path(storage_paths: dict[str, Path]) -> Path:
 def finalization_report_file_name() -> str:
     """Nome estável do relatório de finalização, derivado da configuração."""
     config = get_config()
-    return f"mask_finalization_{config['aoi']['region_code']}_{reference_year()}.json"
+    return f"mask_finalization_{config['aoi']['region_code']}_{active_year()}.json"
 
 
 def comparison_pair_key(comparison: dict[str, Any], chosen: str) -> str:
@@ -133,15 +133,27 @@ def save_finalization_report(
         return report_path
 
     config = get_config()
+    pair_key = comparison_pair_key(comparison, chosen)
+    pair_metrics = comparison["pairs"][pair_key]["metrics"]
     payload = {
         "chosen_source": chosen,
         "region_code": config["aoi"]["region_code"],
-        "year": reference_year(),
+        "year": active_year(),
+        "sources_year": {name: reference_year(name) for name in comparison["sources"]},
         "comparison_report": report_file_name(),
         "sources": comparison["sources"],
         "area_km2": comparison["area_km2"],
         "coffee_share": comparison["coffee_share"],
         "pairs": comparison["pairs"],
+        # Base concreta da decisão: métricas do par que envolve a fonte escolhida.
+        "justification": {
+            "chosen_source": chosen,
+            "year": active_year(),
+            "area_km2": comparison["area_km2"][chosen],
+            "coffee_share": comparison["coffee_share"][chosen],
+            "pair": pair_key,
+            "metrics": pair_metrics,
+        },
         "final_mask_path": str(final_path),
     }
     io.persist_bytes(
@@ -155,7 +167,7 @@ def save_finalization_report(
 def final_mask_preview_file_name() -> str:
     """Nome estável da figura da máscara final, derivado da configuração."""
     config = get_config()
-    return f"mask_final_{config['aoi']['region_code']}_{reference_year()}.png"
+    return f"mask_final_{config['aoi']['region_code']}_{active_year()}.png"
 
 
 def save_final_mask_preview(storage_paths: dict[str, Path]) -> Path:

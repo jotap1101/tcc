@@ -18,10 +18,39 @@ from src.config import get_config
 MASK_BAND = "mask"
 
 
-def reference_year() -> int:
-    """Ano de referência das máscaras, derivado das datas do mosaico Sentinel-2."""
+def reference_year(source: str | None = None) -> int:
+    """Ano de referência de uma máscara, derivado das datas do mosaico.
+
+    Quando a fonte define `year` (ex.: emater, ano próprio), ele sobrescreve o
+    ano global; caso contrário, usa-se o ano das datas do mosaico Sentinel-2.
+    """
     config = get_config()
+    if source is not None:
+        source_cfg = config["ground_truth"]["sources"].get(source)
+        if source_cfg is not None and source_cfg.get("year") is not None:
+            return int(source_cfg["year"])
     return int(config["data"]["dates"]["start"][:4])
+
+
+def active_year() -> int:
+    """Ano ativo do pipeline: o da fonte escolhida (fallback para o ano global).
+
+    Nomeia os artefatos a jusante (composite, máscara final, manifest), de modo
+    que trocar `chosen_source` em config.yaml muda o ano do pipeline por inteiro.
+    """
+    config = get_config()
+    chosen = config["ground_truth"].get("chosen_source")
+    return reference_year(chosen)
+
+
+def required_data_years() -> list[int]:
+    """Anos de dados necessários: o ano global e os anos explícitos das fontes."""
+    config = get_config()
+    years = {reference_year()}
+    for _, source_cfg in config["ground_truth"]["sources"].items():
+        if source_cfg.get("enabled") and source_cfg.get("year") is not None:
+            years.add(int(source_cfg["year"]))
+    return sorted(years)
 
 
 def mask_file_name(source: str, region_code: str, year: int) -> str:
@@ -32,7 +61,8 @@ def mask_file_name(source: str, region_code: str, year: int) -> str:
 def source_mask_path(source_name: str, storage_paths: dict[str, Path]) -> Path:
     """Caminho canônico do GeoTIFF da máscara da fonte (data/interim/<fonte>/)."""
     config = get_config()
-    file_prefix = mask_file_name(source_name, config["aoi"]["region_code"], reference_year())
+    region = config["aoi"]["region_code"]
+    file_prefix = mask_file_name(source_name, region, reference_year(source_name))
     return storage_paths["data_interim"] / source_name / f"{file_prefix}.tif"
 
 
@@ -45,7 +75,9 @@ def build_mapbiomas_mask(aoi: Any) -> Any:
     import ee
 
     source = get_config()["ground_truth"]["sources"]["mapbiomas"]
-    image = ee.Image(source["collection_id"]).select(f"classification_{reference_year()}")
+    image = ee.Image(source["collection_id"]).select(
+        f"classification_{reference_year('mapbiomas')}"
+    )
     return image.eq(source["coffee_class"]).clip(aoi).rename(MASK_BAND)
 
 
@@ -59,7 +91,7 @@ def build_alphaearth_mask(aoi: Any) -> Any:
     import ee
 
     source = get_config()["ground_truth"]["sources"]["alphaearth"]
-    year = reference_year()
+    year = reference_year("alphaearth")
     collection = ee.ImageCollection(source["collection_id"]).filterDate(
         f"{year}-01-01", f"{year}-12-31"
     )
@@ -119,7 +151,14 @@ def save_mask_preview(
     from src import io
 
     config = get_config()
-    file_prefix = mask_file_name(source_name, config["aoi"]["region_code"], reference_year())
+    source = config["ground_truth"]["sources"][source_name]
+    # Fontes vetoriais (ex.: emater) não têm imagem GEE; a miniatura é local.
+    if source.get("kind") == "vector":
+        from src.data.emater_masks import save_emater_mask_preview
+
+        return save_emater_mask_preview(source_name, storage_paths)
+    region = config["aoi"]["region_code"]
+    file_prefix = mask_file_name(source_name, region, reference_year(source_name))
     preview_path = storage_paths["artifacts_figures"] / f"{file_prefix}_preview.png"
     # Reutiliza a miniatura já gerada (execuções repetidas não reprocessam).
     if io.path_exists(preview_path):
@@ -160,7 +199,7 @@ def ensure_source_mask(
         return None
 
     region_code = config["aoi"]["region_code"]
-    year = reference_year()
+    year = reference_year(source_name)
     file_prefix = mask_file_name(source_name, region_code, year)
     target_path = source_mask_path(source_name, storage_paths)
     staging_folder = config["storage"]["drive_root"]
