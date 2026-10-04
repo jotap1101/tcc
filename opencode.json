@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode/deepseek-v4-flash",
+  "model": "opencode-go/deepseek-v4-flash",
   "autoupdate": true,
   "mcp": {
     "github": {
@@ -42,8 +42,8 @@
       "url": "https://drivemcp.googleapis.com/mcp/v1",
       "enabled": true,
       "oauth": {
-        "clientId": "{env:GOOGLE_DRIVE_CLIENT_ID}",
-        "clientSecret": "{env:GOOGLE_DRIVE_CLIENT_SECRET}"
+        "clientId": "{env:GOOGLE_DRIVE_MCP_CLIENT_ID}",
+        "clientSecret": "{env:GOOGLE_DRIVE_MCP_CLIENT_SECRET}"
       }
     }
   }
