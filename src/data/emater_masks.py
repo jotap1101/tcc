@@ -208,26 +208,32 @@ def save_emater_mask_preview(source_name: str, storage_paths: dict[str, Path]) -
 
 
 def render_emater_mask_preview(mask_path: Path) -> bytes:
-    """Renderiza a miniatura binária da máscara da Emater (café em roxo)."""
+    """Renderiza a miniatura binária da máscara da Emater (café em roxo).
+
+    Gera imagem pura (sem eixos/moldura), preservando o aspecto do raster —
+    mesmo padrão das miniaturas getThumbURL das fontes GEE (MapBiomas/AlphaEarth).
+    """
+    import io as stdlib_io
+
+    import matplotlib
     import rasterio
     from matplotlib.colors import ListedColormap
 
+    matplotlib.use("Agg")
+    import matplotlib.image as mpl_image
+
     from src.data.mask_comparison import COFFEE_COLORS, display_array
-    from src.data.raster_utils import render_figure
 
     with rasterio.open(mask_path) as src:
         mask = src.read(1) > 0
 
-    def _build(plt: Any) -> Any:
-        figure, axis = plt.subplots(figsize=(8, 8))
-        axis.imshow(
-            display_array(mask),
-            cmap=ListedColormap(COFFEE_COLORS),
-            vmin=0,
-            vmax=1,
-        )
-        axis.axis("off")
-        figure.tight_layout()
-        return figure
-
-    return render_figure(_build)
+    buffer = stdlib_io.BytesIO()
+    mpl_image.imsave(
+        buffer,
+        display_array(mask, max_dim=1024),
+        cmap=ListedColormap(COFFEE_COLORS),
+        vmin=0,
+        vmax=1,
+        format="png",
+    )
+    return buffer.getvalue()
