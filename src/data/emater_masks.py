@@ -210,30 +210,69 @@ def save_emater_mask_preview(source_name: str, storage_paths: dict[str, Path]) -
 def render_emater_mask_preview(mask_path: Path) -> bytes:
     """Renderiza a miniatura binária da máscara da Emater (café em roxo).
 
-    Gera imagem pura (sem eixos/moldura), preservando o aspecto do raster —
-    mesmo padrão das miniaturas getThumbURL das fontes GEE (MapBiomas/AlphaEarth).
+    Reproduz o padrão das miniaturas getThumbURL das fontes GEE
+    (MapBiomas/AlphaEarth): imagem pura (sem eixos/moldura) de 1024 px no maior
+    lado, transparente fora do polígono do AOI, branco (#ffffff) para não-café
+    e roxo (#800080) para café. O raster UTM é reprojetado para o grid 4326 do
+    AOI (mesma projeção/extensão do getThumbURL), garantindo as mesmas
+    dimensões e cores das demais fontes.
     """
     import io as stdlib_io
 
     import matplotlib
     import rasterio
-    from matplotlib.colors import ListedColormap
+    from rasterio.enums import Resampling
+    from rasterio.features import rasterize
+    from rasterio.transform import from_bounds
 
     matplotlib.use("Agg")
     import matplotlib.image as mpl_image
 
-    from src.data.mask_comparison import COFFEE_COLORS, display_array
+    from src.config import get_config
+    from src.data.gee_client import load_aoi_gdf
+
+    config = get_config()
+    aoi = load_aoi_gdf(config["aoi"]["mesh_path"], config["aoi"]["region_code"])
+    minx, miny, maxx, maxy = aoi.geometry.iloc[0].bounds
+    # Grid 4326 do AOI com 1024 px no maior lado (mesma convenção do getThumbURL;
+    # o GEE arredonda o menor lado para cima — ceil).
+    width = 1024
+    height = max(1, math.ceil((maxy - miny) / (maxx - minx) * width))
+    transform = from_bounds(minx, miny, maxx, maxy, width, height)
 
     with rasterio.open(mask_path) as src:
-        mask = src.read(1) > 0
+        mask_utm = src.read(1)
+        src_transform = src.transform
+        src_crs = src.crs
+
+    # Reprojeta a máscara UTM para o grid 4326 do AOI (vizinho mais próximo
+    # preserva os valores binários 0/1).
+    mask = np.zeros((height, width), dtype=np.uint8)
+    rasterio.warp.reproject(
+        source=mask_utm,
+        destination=mask,
+        src_transform=src_transform,
+        src_crs=src_crs,
+        dst_transform=transform,
+        dst_crs="EPSG:4326",
+        resampling=Resampling.nearest,
+    )
+    # Footprint do AOI no grid 4326: fora do polígono fica transparente.
+    footprint = rasterize(
+        [(aoi.geometry.iloc[0], 1)],
+        out_shape=(height, width),
+        transform=transform,
+        fill=0,
+        all_touched=False,
+        dtype="uint8",
+    )
+    # Paleta igual ao getThumbURL: branco (#ffffff) não-café, roxo (#800080) café.
+    rgba = np.zeros((height, width, 4), dtype=np.uint8)
+    rgba[..., 0] = np.where(mask > 0, 128, 255)
+    rgba[..., 1] = np.where(mask > 0, 0, 255)
+    rgba[..., 2] = np.where(mask > 0, 128, 255)
+    rgba[..., 3] = np.where(footprint > 0, 255, 0)
 
     buffer = stdlib_io.BytesIO()
-    mpl_image.imsave(
-        buffer,
-        display_array(mask, max_dim=1024),
-        cmap=ListedColormap(COFFEE_COLORS),
-        vmin=0,
-        vmax=1,
-        format="png",
-    )
+    mpl_image.imsave(buffer, rgba, format="png")
     return buffer.getvalue()
