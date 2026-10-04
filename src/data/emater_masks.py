@@ -226,7 +226,6 @@ def render_emater_mask_preview(mask_path: Path) -> bytes:
             vmin=0,
             vmax=1,
         )
-        axis.set_title("Máscara binária de café — Emater (glebas)")
         axis.set_xticks([])
         axis.set_yticks([])
         figure.tight_layout()
