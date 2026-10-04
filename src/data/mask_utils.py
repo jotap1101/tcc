@@ -160,7 +160,7 @@ def export_mask_to_drive(
     """Dispara a exportação da máscara binária em GeoTIFF para o Drive.
 
     Usa a escala de processamento (10 m) e o CRS do config.yaml, garantindo o
-    mesmo grid do mosaico Sentinel-2; a reamostragem padrão do GEE (near)
+    mesmo grid do mosaico Sentinel-2; a reamostragem padrão do GEE (nearest)
     preserva os valores categóricos (0/1) da máscara.
     """
     from src.data.gee_client import export_image_to_drive

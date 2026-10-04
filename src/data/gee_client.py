@@ -91,9 +91,11 @@ def export_image_to_drive(
     pasta plana e o arquivo é realocado depois por io.relocate_exported_file().
     CRS, escala e limite de pixels vêm de src/config.yaml (fonte única de verdade).
     ``resampling`` controla a reamostragem quando a resolução nativa difere da
-    escala de exportação: ``nearest`` (vizinho mais próximo, padrão) preserva
-    valores categóricos (0/1) de máscaras — essencial ao exportar ground truth
-    de 30 m (ex.: MapBiomas) para o grid de 10 m do Sentinel-2.
+    escala de exportação. O GEE só aceita ``bilinear``/``bicubic`` em
+    ``Image.resample()``; ``nearest`` (vizinho mais próximo, padrão) é o
+    comportamento nativo (sem chamada) e preserva valores categóricos (0/1) de
+    máscaras — essencial ao exportar ground truth de 30 m (ex.: MapBiomas) para
+    o grid de 10 m do Sentinel-2.
     """
     import ee
 
@@ -102,10 +104,11 @@ def export_image_to_drive(
             f"folder do GEE deve ser um único nome de pasta (sem separadores): {folder!r}"
         )
     config = get_config()
-    # Define explicitamente a reamostragem usada ao reprojetar para o CRS/escala
-    # de exportação (nearest preserva classes; bilinear interpolaria e criaria
-    # valores não binários na máscara).
-    image = image.resample(resampling)
+    # Reamostragem na exportação: `Image.resample()` do GEE só aceita 'bilinear'
+    # ou 'bicubic'; vizinho mais próximo ('nearest', padrão) é o comportamento
+    # nativo do GEE sem chamada — preserva valores categóricos (0/1) da máscara.
+    if resampling != "nearest":
+        image = image.resample(resampling)
     task = ee.batch.Export.image.toDrive(
         image=image,
         description=description,
