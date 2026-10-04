@@ -94,19 +94,23 @@ def native_resolution_m(source_name: str) -> int:
     return int(source_cfg.get("native_resolution_m", 10))
 
 
-def compute_comparison(mask_set: MaskSet, reference: str) -> dict[str, Any]:
+def compute_comparison(mask_set: MaskSet) -> dict[str, Any]:
     """Calcula o diagnóstico comparativo entre as fontes (áreas e concordância).
 
-    A fonte de referência é o ponto de vista das métricas direcionais (precisão
-    e recall); acordo global, IoU, F1 e kappa são simétricos entre as fontes.
+    Cruza todas as fontes habilitadas entre si (todos os pares, sem fonte de
+    referência fixa): a matriz de confusão de cada par e as métricas simétricas
+    (acordo global, IoU, F1, kappa) são calculadas para cada combinação. Nas
+    métricas direcionais (precisão e recall), o ponto de vista é a primeira
+    fonte do par (ordem do config.yaml); o diagnóstico não elege fonte alguma.
     """
+    import itertools
+
     names = list(mask_set.masks)
-    if reference not in names:
-        raise ValueError(f"Fonte de referência inválida: {reference}")
+    if len(names) < 2:
+        raise ValueError("O diagnóstico comparativo exige pelo menos duas fontes.")
     total = int(np.prod(mask_set.shape))
 
     result: dict[str, Any] = {
-        "reference_source": reference,
         "sources": names,
         "years": {name: reference_year(name) for name in names},
         "native_resolution_m": {name: native_resolution_m(name) for name in names},
@@ -127,29 +131,27 @@ def compute_comparison(mask_set: MaskSet, reference: str) -> dict[str, Any]:
         result["area_km2"][name] = count * mask_set.pixel_size_m**2 / 1e6
         result["coffee_share"][name] = count / total
 
-    for other in names:
-        if other == reference:
-            continue
-        a = mask_set.masks[reference]
+    for first, other in itertools.combinations(names, 2):
+        a = mask_set.masks[first]
         b = mask_set.masks[other]
         both = int(np.count_nonzero(a & b))
-        only_reference = int(np.count_nonzero(a & ~b))
+        only_first = int(np.count_nonzero(a & ~b))
         only_other = int(np.count_nonzero(~a & b))
-        neither = total - both - only_reference - only_other
-        result["pairs"][f"{reference}_vs_{other}"] = {
+        neither = total - both - only_first - only_other
+        result["pairs"][f"{first}_vs_{other}"] = {
             "confusion_pixels": {
                 "both_coffee": both,
-                "only_reference": only_reference,
+                "only_reference": only_first,
                 "only_other": only_other,
                 "both_non_coffee": neither,
             },
             "metrics": {
                 "overall_agreement": _safe_ratio(both + neither, total),
-                "iou": _safe_ratio(both, both + only_reference + only_other),
-                "f1": _safe_ratio(2 * both, 2 * both + only_reference + only_other),
-                "precision": _safe_ratio(both, both + only_reference),
+                "iou": _safe_ratio(both, both + only_first + only_other),
+                "f1": _safe_ratio(2 * both, 2 * both + only_first + only_other),
+                "precision": _safe_ratio(both, both + only_first),
                 "recall": _safe_ratio(both, both + only_other),
-                "kappa": _cohen_kappa(both, only_reference, only_other, neither, total),
+                "kappa": _cohen_kappa(both, only_first, only_other, neither, total),
             },
         }
     return result
@@ -188,7 +190,6 @@ def save_report(result: dict[str, Any], storage_paths: dict[str, Path]) -> Path:
 
 def save_figure(
     mask_set: MaskSet,
-    reference: str,
     storage_paths: dict[str, Path],
 ) -> Path:
     """Persiste a figura do diagnóstico no Drive canônico (idempotente)."""
@@ -198,12 +199,12 @@ def save_figure(
     if io.path_exists(figure_path):
         print(f"Figura já existente (reutilizada): {figure_path}")
         return figure_path
-    io.persist_bytes(figure_path, render_comparison_figure(mask_set, reference))
+    io.persist_bytes(figure_path, render_comparison_figure(mask_set))
     print(f"Figura salva em: {figure_path}")
     return figure_path
 
 
-def render_comparison_figure(mask_set: MaskSet, reference: str) -> bytes:
+def render_comparison_figure(mask_set: MaskSet) -> bytes:
     """Renderiza a figura do diagnóstico: todas as fontes + todos os pares.
 
     A primeira linha exibe a máscara de cada fonte (com o ano de referência);

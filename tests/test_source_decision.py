@@ -18,7 +18,6 @@ from src.data.source_decision import (
 def _comparison_payload() -> dict:
     """Payload sintético do relatório comparativo do estágio 03."""
     return {
-        "reference_source": "mapbiomas",
         "sources": ["mapbiomas", "alphaearth", "emater"],
         "years": {"mapbiomas": 2025, "alphaearth": 2024, "emater": 2018},
         "area_km2": {"mapbiomas": 455.0, "alphaearth": 856.0, "emater": 604.0},
@@ -26,6 +25,7 @@ def _comparison_payload() -> dict:
         "pairs": {
             "mapbiomas_vs_alphaearth": {"metrics": {"overall_agreement": 0.9, "iou": 0.5}},
             "mapbiomas_vs_emater": {"metrics": {"overall_agreement": 0.7, "iou": 0.3}},
+            "alphaearth_vs_emater": {"metrics": {"overall_agreement": 0.6, "iou": 0.2}},
         },
     }
 

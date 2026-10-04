@@ -78,7 +78,7 @@ def test_agreement_labels_mapping() -> None:
 
 def test_compute_comparison_metrics() -> None:
     """As métricas de concordância devem refletir a tabela 2x2 do conjunto sintético."""
-    comparison = compute_comparison(_sample_mask_set(), "mapbiomas")
+    comparison = compute_comparison(_sample_mask_set())
     pair = comparison["pairs"]["mapbiomas_vs_alphaearth"]
     assert pair["confusion_pixels"] == {
         "both_coffee": 1,
@@ -97,7 +97,7 @@ def test_compute_comparison_metrics() -> None:
 
 def test_compute_comparison_areas() -> None:
     """A área de café por fonte deve derivar da contagem de pixels e do tamanho do pixel."""
-    comparison = compute_comparison(_sample_mask_set(), "mapbiomas")
+    comparison = compute_comparison(_sample_mask_set())
     assert comparison["area_km2"]["mapbiomas"] == pytest.approx(2e-4)
     assert comparison["area_km2"]["alphaearth"] == pytest.approx(2e-4)
     assert comparison["coffee_share"]["mapbiomas"] == pytest.approx(2 / 16)
@@ -105,15 +105,25 @@ def test_compute_comparison_areas() -> None:
 
 def test_compute_comparison_reports_native_resolution() -> None:
     """O relatório deve registrar a resolução nativa de cada fonte (transparência)."""
-    comparison = compute_comparison(_sample_mask_set(), "mapbiomas")
+    comparison = compute_comparison(_sample_mask_set())
     assert comparison["native_resolution_m"]["mapbiomas"] == 30
     assert comparison["native_resolution_m"]["alphaearth"] == 10
 
 
-def test_compute_comparison_invalid_reference() -> None:
-    """Uma fonte de referência inexistente deve levantar ValueError."""
-    with pytest.raises(ValueError):
-        compute_comparison(_sample_mask_set(), "fonte_inexistente")
+def test_compute_comparison_crosses_all_pairs() -> None:
+    """O diagnóstico deve cruzar todas as fontes entre si (todas x todas)."""
+    masks = {
+        "mapbiomas": np.zeros((4, 4), dtype=bool),
+        "alphaearth": np.zeros((4, 4), dtype=bool),
+        "emater": np.zeros((4, 4), dtype=bool),
+    }
+    mask_set = MaskSet(masks=masks, crs="EPSG:31983", shape=(4, 4), pixel_size_m=10.0)
+    comparison = compute_comparison(mask_set)
+    assert set(comparison["pairs"]) == {
+        "mapbiomas_vs_alphaearth",
+        "mapbiomas_vs_emater",
+        "alphaearth_vs_emater",
+    }
 
 
 def test_load_masks_reads_on_common_grid(tmp_path) -> None:
@@ -144,14 +154,15 @@ def test_save_report_idempotent(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("src.io.detect_platform", lambda: "local")
     storage_paths = {"artifacts_metrics_ground_truth": tmp_path / "ground_truth"}
 
-    comparison = compute_comparison(_sample_mask_set(), "mapbiomas")
+    comparison = compute_comparison(_sample_mask_set())
     first = save_report(comparison, storage_paths)
     second = save_report(comparison, storage_paths)
 
     assert first == second
     assert first.is_file()
     payload = json.loads(first.read_text(encoding="utf-8"))
-    assert payload["reference_source"] == "mapbiomas"
+    assert "sources" in payload
+    assert "mapbiomas_vs_alphaearth" in payload["pairs"]
 
 
 def test_save_figure_idempotent(tmp_path, monkeypatch) -> None:
@@ -160,8 +171,8 @@ def test_save_figure_idempotent(tmp_path, monkeypatch) -> None:
     storage_paths = {"artifacts_figures": tmp_path / "figures"}
 
     mask_set = _sample_mask_set()
-    first = save_figure(mask_set, "mapbiomas", storage_paths)
-    second = save_figure(mask_set, "mapbiomas", storage_paths)
+    first = save_figure(mask_set, storage_paths)
+    second = save_figure(mask_set, storage_paths)
 
     assert first == second
     assert first.is_file()
@@ -179,4 +190,4 @@ def test_save_figure_requires_two_sources(tmp_path, monkeypatch) -> None:
         pixel_size_m=10.0,
     )
     with pytest.raises(ValueError):
-        save_figure(single, "mapbiomas", storage_paths)
+        save_figure(single, storage_paths)
