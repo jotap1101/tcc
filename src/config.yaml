@@ -46,7 +46,7 @@ ground_truth:
       collection_filter: 11
       year: 2025
       coffee_class: 46  # classe 3.2.2.1 Café (banda "classification")
-      # Resolução nativa (30 m — Landsat). A exportação do GEE reamostra (near)
+      # Resolução nativa (30 m — Landsat). A exportação do GEE reamostra (nearest)
       # para o grid de 10 m do Sentinel-2 (config.data.export.scale).
       native_resolution_m: 30
     alphaearth:

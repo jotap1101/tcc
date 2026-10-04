@@ -88,7 +88,7 @@ def native_resolution_m(source_name: str) -> int:
     """Resolução nativa (m) da fonte de ground truth, declarada em config.yaml.
 
     Fontes com resolução diferente da escala de processamento (10 m) são
-    reamostradas na exportação do GEE (near) para o grid do Sentinel-2.
+    reamostradas na exportação do GEE (nearest) para o grid do Sentinel-2.
     """
     source_cfg = get_config()["ground_truth"]["sources"].get(source_name, {})
     return int(source_cfg.get("native_resolution_m", 10))

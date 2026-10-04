@@ -81,7 +81,7 @@ def export_image_to_drive(
     file_name_prefix: str,
     region: Any,
     scale: int,
-    resampling: str = "near",
+    resampling: str = "nearest",
 ) -> Any:
     """Dispara a exportação de uma imagem em GeoTIFF para o Drive (assíncrona).
 
@@ -91,7 +91,7 @@ def export_image_to_drive(
     pasta plana e o arquivo é realocado depois por io.relocate_exported_file().
     CRS, escala e limite de pixels vêm de src/config.yaml (fonte única de verdade).
     ``resampling`` controla a reamostragem quando a resolução nativa difere da
-    escala de exportação: ``near`` (vizinho mais próximo, padrão) preserva
+    escala de exportação: ``nearest`` (vizinho mais próximo, padrão) preserva
     valores categóricos (0/1) de máscaras — essencial ao exportar ground truth
     de 30 m (ex.: MapBiomas) para o grid de 10 m do Sentinel-2.
     """
@@ -103,7 +103,7 @@ def export_image_to_drive(
         )
     config = get_config()
     # Define explicitamente a reamostragem usada ao reprojetar para o CRS/escala
-    # de exportação (near preserva classes; bilinear interpolaria e criaria
+    # de exportação (nearest preserva classes; bilinear interpolaria e criaria
     # valores não binários na máscara).
     image = image.resample(resampling)
     task = ee.batch.Export.image.toDrive(
