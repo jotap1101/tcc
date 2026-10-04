@@ -208,8 +208,8 @@ def render_comparison_figure(mask_set: MaskSet) -> bytes:
     """Renderiza a figura do diagnóstico: todas as fontes + todos os pares.
 
     A primeira linha exibe a máscara de cada fonte (com o ano de referência);
-    as linhas seguintes mostram o mapa de concordância de cada par de fontes,
-    permitindo comparar todas as combinações, não apenas um par.
+    a segunda linha mostra os mapas de concordância de todos os pares de fontes,
+    dispostos lado a lado — cada coluna da grade corresponde a um par.
     """
     from src.data.raster_utils import render_figure
 
@@ -217,11 +217,11 @@ def render_comparison_figure(mask_set: MaskSet) -> bytes:
     if len(names) < 2:
         raise ValueError("O diagnóstico comparativo exige pelo menos duas fontes.")
     pairs = list(itertools.combinations(names, 2))
-    n_cols = len(names)
-    n_rows = 1 + len(pairs)
+    n_cols = max(len(names), len(pairs))
+    n_rows = 2
 
     def _build(plt: Any) -> Any:
-        figure, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 4.4 * n_rows))
+        figure, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 8.8))
         axes = np.atleast_2d(axes)
         for col, name in enumerate(names):
             _plot_mask(
@@ -229,15 +229,17 @@ def render_comparison_figure(mask_set: MaskSet) -> bytes:
                 display_array(mask_set.masks[name]),
                 f"{name} ({reference_year(name)})",
             )
-        for row, (first, other) in enumerate(pairs, start=1):
+        for col in range(len(names), n_cols):
+            axes[0, col].set_axis_off()
+        for col, (first, other) in enumerate(pairs):
             _plot_agreement(
-                axes[row, 0],
+                axes[1, col],
                 display_array(agreement_labels(mask_set.masks[first], mask_set.masks[other])),
                 first,
                 other,
             )
-            for col in range(1, n_cols):
-                axes[row, col].set_axis_off()
+        for col in range(len(pairs), n_cols):
+            axes[1, col].set_axis_off()
         figure.suptitle("Comparação das máscaras de café por fonte de ground truth", fontsize=13)
         figure.tight_layout(rect=(0, 0, 1, 0.95))
         return figure
