@@ -4,9 +4,11 @@ Um único `train_fold()` executa a validação cruzada espacial (k = `splits.fol
 com o mesmo protocolo para U-Net (estágio 09) e SegFormer (estágio 10): mesma
 perda multivariada (Dice + Focal + Boundary), otimizador Adam, scheduler
 cosine annealing, sementes por dobra e métricas de pixel. Somente a arquitetura
-diverge — garantia da comparação científica justa. Os artefatos por dobra
-(pesos, métricas e histórico) são persistidos no Drive canônico e reutilizados
-em reexecuções (idempotência), com metadata de execução em artifacts/runs/.
+diverge — garantia da comparação científica justa. O treino usa o conjunto de
+patches da fonte escolhida manualmente (`ground_truth.chosen_source`), que possui
+máscara e patches próprios independentemente da escolha. Os artefatos por dobra
+(pesos, métricas e histórico) são persistidos no Drive canônico sob subpasta da
+fonte e reutilizados em reexecuções (idempotência), com metadata em artifacts/runs/.
 """
 
 from __future__ import annotations
@@ -23,6 +25,8 @@ from torch import nn
 from src.config import get_config
 from src.data.augmentations import SegmentAugmentation
 from src.data.dataset import build_loaders
+from src.data.mask_utils import reference_year
+from src.data.source_decision import chosen_source
 from src.losses import SegmentationLoss
 from src.metrics import SegmentationMetrics
 from src.utils import set_all_seeds
@@ -33,6 +37,7 @@ class FoldResult:
     """Resumo do treino de uma dobra (ou do reaproveitamento de uma já treinada)."""
 
     model: str
+    source_name: str
     fold: int
     weights_path: Path
     metrics_path: Path
@@ -44,31 +49,39 @@ class FoldResult:
     skipped: bool
 
 
-def weights_path(storage_paths: dict[str, Path], model_name: str, fold: int) -> Path:
-    """Caminho canônico dos pesos do modelo em uma dobra."""
-    return storage_paths["models"] / model_name / f"fold_{fold}.pt"
+def weights_path(
+    storage_paths: dict[str, Path], model_name: str, source_name: str, fold: int
+) -> Path:
+    """Caminho canônico dos pesos do modelo em uma dobra da fonte."""
+    return storage_paths["models"] / model_name / source_name / f"fold_{fold}.pt"
 
 
-def metrics_path(storage_paths: dict[str, Path], model_name: str, fold: int) -> Path:
-    """Caminho canônico das métricas de validação em uma dobra."""
-    return storage_paths["artifacts_metrics"] / model_name / f"fold_{fold}.json"
+def metrics_path(
+    storage_paths: dict[str, Path], model_name: str, source_name: str, fold: int
+) -> Path:
+    """Caminho canônico das métricas de validação em uma dobra da fonte."""
+    return storage_paths["artifacts_metrics"] / model_name / source_name / f"fold_{fold}.json"
 
 
-def history_path(storage_paths: dict[str, Path], model_name: str, fold: int) -> Path:
-    """Caminho canônico do histórico de treino (loss e métricas por época)."""
-    return storage_paths["artifacts_runs"] / model_name / f"fold_{fold}.json"
+def history_path(
+    storage_paths: dict[str, Path], model_name: str, source_name: str, fold: int
+) -> Path:
+    """Caminho canônico do histórico de treino (loss e métricas por época) da fonte."""
+    return storage_paths["artifacts_runs"] / model_name / source_name / f"fold_{fold}.json"
 
 
-def fold_training_done(storage_paths: dict[str, Path], model_name: str, fold: int) -> bool:
+def fold_training_done(
+    storage_paths: dict[str, Path], model_name: str, source_name: str, fold: int
+) -> bool:
     """Indica se os três artefatos de uma dobra já existem (idempotência)."""
     from src import io
 
     return all(
         io.path_exists(path)
         for path in (
-            weights_path(storage_paths, model_name, fold),
-            metrics_path(storage_paths, model_name, fold),
-            history_path(storage_paths, model_name, fold),
+            weights_path(storage_paths, model_name, source_name, fold),
+            metrics_path(storage_paths, model_name, source_name, fold),
+            history_path(storage_paths, model_name, source_name, fold),
         )
     )
 
@@ -133,16 +146,19 @@ def train_fold(
     fold: int,
     device: torch.device,
     force: bool = False,
+    source_name: str | None = None,
 ) -> FoldResult:
-    """Treina um modelo em uma dobra da validação espacial (protocolo único).
+    """Treina um modelo em uma dobra da validação espacial da fonte (protocolo único).
 
-    Reutiliza os artefatos da dobra quando já existem (a menos que ``force``);
-    caso contrário, executa o protocolo completo e persiste pesos, métricas e
-    histórico. A semente por dobra é ``reproducibility.seed + fold`` e, a cada
-    época, as aumentações são reseedadas com ``semente + época``.
+    A fonte é a escolhida manualmente em config.yaml (padrão) ou a explicitada em
+    ``source_name``. Reutiliza os artefatos da dobra quando já existem (a menos
+    que ``force``); caso contrário, executa o protocolo completo e persiste pesos,
+    métricas e histórico. A semente por dobra é ``reproducibility.seed + fold`` e,
+    a cada época, as aumentações são reseedadas com ``semente + época``.
     """
     from src import io
 
+    source = source_name or chosen_source()
     config = get_config()
     training = config["training"]
     epochs = int(training["epochs"])
@@ -152,15 +168,16 @@ def train_fold(
     num_workers = int(training["num_workers"])
     fold_seed = int(config["reproducibility"]["seed"]) + fold
 
-    weights_file = weights_path(storage_paths, model_name, fold)
-    metrics_file = metrics_path(storage_paths, model_name, fold)
-    history_file = history_path(storage_paths, model_name, fold)
+    weights_file = weights_path(storage_paths, model_name, source, fold)
+    metrics_file = metrics_path(storage_paths, model_name, source, fold)
+    history_file = history_path(storage_paths, model_name, source, fold)
 
-    if not force and fold_training_done(storage_paths, model_name, fold):
+    if not force and fold_training_done(storage_paths, model_name, source, fold):
         saved = json.loads(io.ensure_local_copy(metrics_file).read_text(encoding="utf-8"))
         print(f"[{model_name}] dobra {fold} já treinada (artefatos reutilizados).")
         return FoldResult(
             model=model_name,
+            source_name=source,
             fold=fold,
             weights_path=weights_file,
             metrics_path=metrics_file,
@@ -176,6 +193,7 @@ def train_fold(
     augmentation = SegmentAugmentation(config)
     train_loader, val_loader = build_loaders(
         storage_paths,
+        source,
         fold,
         batch_size,
         fold_seed,
@@ -246,6 +264,7 @@ def train_fold(
     print(f"Pesos: {weights_file}")
     return FoldResult(
         model=model_name,
+        source_name=source,
         fold=fold,
         weights_path=weights_file,
         metrics_path=metrics_file,
@@ -271,8 +290,10 @@ def _package_versions() -> dict[str, str]:
     return versions
 
 
-def run_metadata(model_name: str, storage_paths: dict[str, Path]) -> dict[str, Any]:
-    """Metadata de reprodutibilidade de uma execução de treino."""
+def run_metadata(
+    model_name: str, storage_paths: dict[str, Path], source_name: str
+) -> dict[str, Any]:
+    """Metadata de reprodutibilidade de uma execução de treino da fonte."""
     from src.data.patch_generation import patch_fingerprint_hash
     from src.data.spatial_split import fold_count
 
@@ -280,6 +301,8 @@ def run_metadata(model_name: str, storage_paths: dict[str, Path]) -> dict[str, A
     training = config["training"]
     return {
         "model": model_name,
+        "source_name": source_name,
+        "year": reference_year(source_name),
         "fold_count": fold_count(),
         "seed": int(config["reproducibility"]["seed"]),
         "epochs": int(training["epochs"]),
@@ -287,19 +310,19 @@ def run_metadata(model_name: str, storage_paths: dict[str, Path]) -> dict[str, A
         "lr": float(training["lr"]),
         "weight_decay": float(training["weight_decay"]),
         "num_workers": int(training["num_workers"]),
-        "manifest_fingerprint_hash": patch_fingerprint_hash(storage_paths),
+        "manifest_fingerprint_hash": patch_fingerprint_hash(storage_paths, source_name),
         "environment": _package_versions(),
     }
 
 
-def save_run_metadata(storage_paths: dict[str, Path], model_name: str) -> Path:
-    """Persiste o metadata de execução em artifacts/runs/{model}/run.meta.json."""
+def save_run_metadata(storage_paths: dict[str, Path], model_name: str, source_name: str) -> Path:
+    """Persiste o metadata de execução em artifacts/runs/{model}/{fonte}/run.meta.json."""
     from src import io
 
-    path = storage_paths["artifacts_runs"] / model_name / "run.meta.json"
+    path = storage_paths["artifacts_runs"] / model_name / source_name / "run.meta.json"
     if io.path_exists(path):
         print(f"Metadata de execução já existente (reutilizado): {path}")
         return path
-    _persist_json(path, run_metadata(model_name, storage_paths))
+    _persist_json(path, run_metadata(model_name, storage_paths, source_name))
     print(f"Metadata de execução salvo em: {path}")
     return path

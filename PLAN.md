@@ -12,7 +12,7 @@ Guiar a implementação sequencial e modular de todo o pipeline — da aquisiç�
 
 - **Layout híbrido**: notebooks Jupyter enxutos (`.ipynb`) atuam como camada de orquestração/visualização; toda lógica reutilizável vive no pacote compartilhado **`src/`** (Python puro), único alvo de `ruff`, `mypy` e `pytest`.
 - **Fonte única de verdade**: `src/config.yaml` (carregado por `config.py`) centraliza caminhos, bandas, tamanho de patch, hiperparâmetros e sementes. Nenhum caminho hardcoded nos notebooks.
-- **Dados orientados por manifesto**: `manifest.parquet` registra cada patch (`patch_id`, `tile_id`, `fold`, bbox, `coffee_ratio`, `mask_source`, caminhos). É a espinha dorsal da reprodutibilidade.
+- **Dados orientados por manifesto**: cada fonte de ground truth tem um manifesto próprio `manifest_<fonte>.parquet` que registra cada patch (`patch_id`, `tile_id`, `fold`, bbox, `coffee_ratio`, `mask_source`, caminhos). É a espinha dorsal da reprodutibilidade.
 - **Protocolo de treinamento idêntico** entre modelos: mesmo split, perda, otimizador, scheduler, métricas e semente — apenas a arquitetura difere. Isso garante uma comparação cientificamente justa.
 - **Notebooks agnósticos de plataforma**: todo notebook executa **corretamente** no **Google Colab e no Kaggle**, com o mesmo protocolo (mesmo código, sementes, config e processamento). Toda detecção de ambiente, montagem do Drive e resolução de caminhos é abstraída em `src/` — notebooks nunca usam caminhos ou APIs específicos de plataforma.
 - **Abstração de armazenamento (`src/io.py`)**: o contrato único para detecção de plataforma, montagem do Drive e resolução de caminhos. Expõe no mínimo `detect_platform()`, `mount_drive()` (Colab nativo; Kaggle via Drive API com cache local), `ensure_storage_root()` (idempotente — cria `MyDrive/tcc/` e toda subpasta necessária recursivamente quando ausente, no-op quando presente), `resolve_storage_paths()` (construído a partir do `config.yaml`) e `sync_repo_to_workspace()` (copia o espelho `MyDrive/tcc/repo/` para o workspace quando ele já existe). Notebooks consomem apenas este módulo.
@@ -20,7 +20,7 @@ Guiar a implementação sequencial e modular de todo o pipeline — da aquisiç�
 - **Pipeline idempotente e re-executável**: reexecutar um notebook é seguro — ele abre/cria a árvore `tcc/` e nunca sobrescreve silenciosamente artefatos versionados; novas execuções gravam saídas versionadas por `run_id` (métricas, checkpoints, logs) ou confirmam sobrescritas explicitamente.
 - **Dependências específicas de plataforma**: bibliotecas atreladas a um host (ex.: montagem do Drive no `google.colab`, secrets do Kaggle) são instaladas dentro do notebook `00` em runtime — elas **não** entram em `pyproject.toml`/`uv.lock`, mantendo o repositório agnóstico de ambiente.
 - **Armazenamento canônico no Google Drive**: a pasta `tcc/` na **raiz do Google Drive** (`MyDrive/tcc/`) é a raiz única de armazenamento para todo dado, modelo, métrica, figura e log. Notebooks a acessam se já existir, ou a criam (e qualquer subpasta necessária) caso contrário — os próprios notebooks geram a estrutura de pastas.
-- **Ground truth por fonte**: cada fonte de ground truth (MapBiomas, AlphaEarth, S2DR e qualquer fonte futura) é integrada em **célula de notebook dedicada** e armazenada em **subpasta própria** sob `MyDrive/tcc/data/{raw,interim}/<fonte>/`. Adicionar uma fonte significa adicionar uma célula — nunca modificar a lógica de outra fonte.
+- **Ground truth por fonte**: cada fonte de ground truth (MapBiomas, AlphaEarth, Emater e qualquer fonte futura) declara o seu **ano mais recente** (`year` em `src/config.yaml`) e é integrada em **célula de notebook dedicada**, armazenada em **subpasta própria** sob `MyDrive/tcc/data/interim/<fonte>/`, com **conjunto próprio de patches e manifesto** (`patches/<fonte>/`, `manifest_<fonte>.parquet`). Adicionar uma fonte significa adicionar uma célula — nunca modificar a lógica de outra fonte. **Sem eleição automática**: o estágio 03 compara todas as fontes e o estágio 04 registra a decisão **manual** do pesquisador (`ground_truth.chosen_source`), que apenas seleciona o conjunto de patches do treino (09/10).
 - **CI (GitHub Actions)** executa `ruff` + `mypy` + `pytest` no push; treinos pesados de GPU rodam no Colab/Kaggle com artefatos persistidos na raiz `tcc/` do Drive.
 - **Autenticação dentro dos notebooks**: toda etapa de autenticação (GEE, Hugging Face, Kaggle) é executada nas próprias células de código dos notebooks com as bibliotecas necessárias — ex.: GEE via OAuth com a conta principal (`ee.Authenticate()`, token persistido na raiz `tcc/` do Drive). Credenciais nunca são commitadas; não há etapa externa/manual de autenticação.
 - **Princípios de qualidade de código**: DRY, Responsabilidade Única, KISS, YAGNI e Separação de Conceitos se aplicam em todo o projeto — notebooks orquestram/visualizam e nunca reimplementam ou duplicam lógica que vive em `src/`; o código de notebook atende ao mesmo padrão de qualidade do pacote compartilhado.
@@ -36,7 +36,7 @@ tcc/
 ├── src/                           # pacote compartilhado (lógica reutilizável)
 │   ├── config.py + config.yaml
 │   ├── bootstrap.py  setup.py  io.py  utils.py
-│   ├── data/{augmentations,dataset,eda,gee_client,mask_comparison,mask_finalization,mask_utils,patch_generation,preprocessing,raster_utils,spatial_split}.py
+│   ├── data/{augmentations,dataset,eda,gee_client,mask_comparison,mask_utils,patch_generation,preprocessing,raster_utils,source_decision,spatial_split}.py
 │   ├── losses.py
 │   ├── metrics.py
 │   ├── trainer.py
@@ -58,7 +58,7 @@ tcc/
 ```bash
 MyDrive/tcc/                       # raiz canônica de todo o armazenamento do projeto (criada/acessada pelos notebooks)
 ├── data/{raw,interim,processed,external}/   # dados espectrais, máscaras, patches
-│   └── raw|interim/{mapbiomas,alphaearth,s2dr,...}/   # ground truth por fonte
+│   └── interim/{mapbiomas,alphaearth,emater,...}/   # ground truth por fonte (ano próprio)
 ├── models/{unet,segformer}/       # pesos (espelhados localmente, git-ignored)
 ├── artifacts/{metrics,figures,runs}/       # métricas, figuras, logs de execução
 ├── repo/src/                      # espelho do código-fonte (entrega do src/ ao runtime)
@@ -71,14 +71,14 @@ MyDrive/tcc/                       # raiz canônica de todo o armazenamento do p
 ```bash
 Malha vetorial IBGE (Região Geográfica Imediata 310044) → polígono AOI
 GEE Sentinel-2 L2A (B2/B3/B4/B8) filtrado pelo AOI
-  → mosaico sem nuvens (QA60)                       [01]
-  → máscaras de referência por fonte (MapBiomas / AlphaEarth / ...)  [02]
-  → comparação de máscaras por fonte + finalização                  [03, 04]
-  → composites alinhados e normalizados                  [05]
-  → patches 512x512 + manifesto                     [06]
-  → atribuição espacial k-fold                      [07]
-  → EDA / estatísticas de normalização                      [08]
-  → treino U-Net / SegFormer (k=5)                  [09, 10]
+  → mosaicos sem nuvens por ano (QA60)                  [01]
+  → máscaras de referência por fonte (ano próprio)      [02]
+  → comparação de máscaras por fonte + decisão manual   [03, 04]
+  → composites alinhados e normalizados por ano         [05]
+  → patches 512x512 + manifesto por fonte               [06]
+  → atribuição espacial k-fold por fonte                [07]
+  → EDA / estatísticas de normalização por fonte        [08]
+  → treino U-Net / SegFormer (k=5, fonte escolhida)     [09, 10]
   → métricas por pixel (IoU/F1/Precision/Recall)        [11]
   → comparação estatística                         [12]
   → Grad-CAM + Attention Rollout                   [13, 14]
@@ -93,15 +93,15 @@ Cada notebook é um estágio isolado com uma única responsabilidade e entradas/
 | Notebook                                   | Fase                 | Entrada → Saída                                                                                         |
 | ------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------- |
 | `00_setup_environment.ipynb`               | 0. Setup             | — → ambiente pronto, `src/` entregue, raiz `tcc/` do Drive resolvida, config carregada, GEE autenticado |
-| `01_gee_sentinel2_acquisition.ipynb`       | 1. Aquisição         | malha IBGE (310044) → polígono AOI → mosaicos GeoTIFF Sentinel-2 L2A                                    |
-| `02_gee_reference_masks.ipynb`             | 1. Aquisição         | cada fonte (MapBiomas/AlphaEarth/...) → máscaras binárias de 10 m por fonte                             |
-| `03_mask_sources_comparison.ipynb`         | 2. Ground Truth      | máscaras por fonte → diagnóstico comparativo                                                            |
-| `04_mask_finalization.ipynb`               | 2. Ground Truth      | fonte escolhida → máscaras binárias finais                                                              |
-| `05_preprocessing.ipynb`                   | 3. Pré-processamento | mosaicos → composites sem nuvens normalizados                                                           |
-| `06_patch_generation.ipynb`                | 3. Dataset           | composites+máscaras → patches 512x512 + manifesto                                                       |
-| `07_spatial_kfold_split.ipynb`             | 3. Dataset           | manifesto → manifesto com `fold`                                                                        |
-| `08_dataset_eda.ipynb`                     | 3. Dataset           | manifesto → estatísticas de normalização + verificações de sanidade                                     |
-| `09_train_unet.ipynb`                      | 4. Treinamento       | dataset → pesos do U-Net + métricas por dobra                                                           |
+| `01_gee_sentinel2_acquisition.ipynb`       | 1. Aquisição         | malha IBGE (310044) → polígono AOI → mosaicos GeoTIFF Sentinel-2 L2A por ano das fontes |
+| `02_gee_reference_masks.ipynb`             | 1. Aquisição         | cada fonte (MapBiomas 2025/AlphaEarth 2024/Emater 2018) → máscaras binárias de 10 m por fonte |
+| `03_mask_sources_comparison.ipynb`         | 2. Ground Truth      | máscaras por fonte → diagnóstico comparativo (todas as fontes e pares) |
+| `04_source_decision.ipynb`                 | 2. Ground Truth      | relatório comparativo → registro da decisão manual da fonte de treino |
+| `05_preprocessing.ipynb`                   | 3. Pré-processamento | mosaicos por ano → composites sem nuvens normalizados (alinhados à máscara de referência do ano) |
+| `06_patch_generation.ipynb`                | 3. Dataset           | composites+máscaras por fonte → patches 512x512 + manifesto por fonte |
+| `07_spatial_kfold_split.ipynb`             | 3. Dataset           | manifesto por fonte → manifesto com `fold` por fonte |
+| `08_dataset_eda.ipynb`                     | 3. Dataset           | manifesto por fonte → estatísticas de normalização + verificações de sanidade por fonte |
+| `09_train_unet.ipynb`                      | 4. Treinamento       | dataset da fonte escolhida → pesos do U-Net + métricas por dobra |
 | `10_train_segformer.ipynb`                 | 4. Treinamento       | dataset → pesos do SegFormer + métricas por dobra                                                       |
 | `11_evaluation.ipynb`                      | 5. Avaliação         | predições → IoU/F1/P/R em nível de pixel                                                                |
 | `12_comparative_analysis.ipynb`            | 5. Avaliação         | métricas → comparação estatística + mapas de erro                                                       |
@@ -112,9 +112,9 @@ Cada notebook é um estágio isolado com uma única responsabilidade e entradas/
 
 ## 6. Esquema de config e artefatos
 
-- **`config.yaml`**: `aoi` (código da região `310044`, `vector_source` `ibge_mesh`, `mesh_path` apontando para `data/external/ibge/mg_rg_immediatas_2025/`), `data` (`collection`, `dates`, `bands`, `patch_size`, `coffee_min_ratio`, `cloud_threshold`, `crs`, `export`), `gee` (`project` — ID do projeto Cloud para `ee.Initialize`), `ground_truth` (`chosen_source` + bloco `sources` com `collection_id`, classe/limiar e `enabled` por fonte), `splits.fold_count`, `reproducibility.seed`, `model` (`unet_channels`, `segformer_variant`), pesos de `loss`, `augmentation` (aumentações geométricas determinísticas reseedadas por época: `hflip_prob`, `vflip_prob`, `rot90_prob`), `training` (`lr`, `epochs`, `batch_size`, `weight_decay`, `num_workers`). O bloco `storage` mapeia a raiz `tcc/` do Drive e toda subpasta (`data`, `models`, `artifacts`, `repo`, `secrets`, ...) — todos os caminhos são resolvidos daqui, nunca hardcoded.
-- **Colunas do `manifest.parquet`**: `patch_id`, `tile_id`, `fold`, `row`, `col`, `bbox`, `coffee_ratio`, `mask_source`, `image_path`, `mask_path`.
-- **Artefatos** (todos sob a raiz `tcc/` do Drive, caminhos resolvidos de `config.yaml`): `MyDrive/tcc/artifacts/metrics/{model}/fold_{i}.json`, `MyDrive/tcc/artifacts/figures/`, `MyDrive/tcc/models/{model}/fold_{i}.pt`, `MyDrive/tcc/data/processed/manifest.parquet` e `MyDrive/tcc/data/processed/normalization_stats.json` (estatísticas de normalização por banda — estágio 08).
+- **`config.yaml`**: `aoi` (código da região `310044`, `vector_source` `ibge_mesh`, `mesh_path` apontando para `data/external/ibge/mg_rg_immediatas_2025/`), `data` (`collection`, `dates` — fallback para fontes sem `year`, `bands`, `patch_size`, `coffee_min_ratio`, `cloud_threshold`, `crs`, `export`), `gee` (`project` — ID do projeto Cloud para `ee.Initialize`), `ground_truth` (`chosen_source` — decisão manual — + bloco `sources` com `year` próprio por fonte, `collection_id`/`collection_filter`, classe/limiar e `enabled`), `splits.fold_count`, `reproducibility.seed`, `model` (`unet_channels`, `segformer_variant`), pesos de `loss`, `augmentation` (aumentações geométricas determinísticas reseedadas por época: `hflip_prob`, `vflip_prob`, `rot90_prob`), `training` (`lr`, `epochs`, `batch_size`, `weight_decay`, `num_workers`). O bloco `storage` mapeia a raiz `tcc/` do Drive e toda subpasta (`data`, `models`, `artifacts`, `repo`, `secrets`, ...) — todos os caminhos são resolvidos daqui, nunca hardcoded.
+- **Colunas do `manifest_<fonte>.parquet`**: `patch_id`, `tile_id`, `fold`, `row`, `col`, `bbox`, `coffee_ratio`, `mask_source`, `image_path`, `mask_path`.
+- **Artefatos** (todos sob a raiz `tcc/` do Drive, caminhos resolvidos de `config.yaml`): `MyDrive/tcc/artifacts/metrics/{model}/{fonte}/fold_{i}.json`, `MyDrive/tcc/artifacts/figures/`, `MyDrive/tcc/models/{model}/{fonte}/fold_{i}.pt`, `MyDrive/tcc/data/processed/manifest_<fonte>.parquet` e `MyDrive/tcc/data/processed/normalization_stats_<fonte>.json` (estatísticas de normalização por banda — estágio 08).
 
 ## 7. Rastreador de progresso
 
@@ -134,19 +134,19 @@ Cada notebook é um estágio isolado com uma única responsabilidade e entradas/
 
 ### Fase 2 — Ground Truth
 
-- [x] `03_mask_sources_comparison.ipynb`
-- [x] `04_mask_finalization.ipynb`
+- [x] `03_mask_sources_comparison.ipynb` — comparação de todas as fontes (áreas, concordância entre todos os pares, figura multi-painel)
+- [x] `04_source_decision.ipynb` — registro da decisão manual da fonte de treino (sem eleição automática)
 
 ### Fase 3 — Pré-processamento e Dataset
 
 - [x] `05_preprocessing.ipynb`
-- [x] `06_patch_generation.ipynb`
-- [x] `07_spatial_kfold_split.ipynb` — divisão espacial k-fold (k-means determinístico em numpy puro sobre centroides) gravada na coluna `fold` do manifesto, com `split.meta.json` para idempotência
-- [x] `08_dataset_eda.ipynb` — estatísticas de normalização por banda (média, desvio, fração de NaN) persistidas em `normalization_stats.json` com fingerprint, verificações de sanidade e figura de resumo
+- [x] `06_patch_generation.ipynb` — patches 512x512 por fonte + manifesto `manifest_<fonte>.parquet`
+- [x] `07_spatial_kfold_split.ipynb` — divisão espacial k-fold (k-means determinístico em numpy puro sobre centroides) gravada na coluna `fold` do manifesto por fonte, com `split_<fonte>.meta.json` para idempotência
+- [x] `08_dataset_eda.ipynb` — estatísticas de normalização por banda (média, desvio, fração de NaN) persistidas em `normalization_stats_<fonte>.json` com fingerprint, verificações de sanidade e figura de resumo por fonte
 
 ### Fase 4 — Treinamento
 
-- [ ] `09_train_unet.ipynb` — treino do U-Net com o protocolo único (`src/trainer.train_fold`): perda multivariada, Adam + cosine annealing, dobras 0..4, pesos `models/unet/fold_i.pt`, métricas e histórico por dobra + metadata de execução
+- [ ] `09_train_unet.ipynb` — treino do U-Net na fonte escolhida com o protocolo único (`src/trainer.train_fold`): perda multivariada, Adam + cosine annealing, dobras 0..4, pesos `models/unet/<fonte>/fold_i.pt`, métricas e histórico por dobra + metadata de execução
 - [ ] `10_train_segformer.ipynb`
 
 ### Fase 5 — Avaliação
@@ -169,12 +169,14 @@ Cada notebook é um estágio isolado com uma única responsabilidade e entradas/
 - [x] `config.py` + `config.yaml`
 - [x] `data/dataset.py` (dataset de patches, normalização, divisão por dobra e carregadores — estágio 09), `data/augmentations.py` (aumentações geométricas determinísticas por época)
 - [x] `data/patch_generation.py` (patches 512x512 + manifesto Parquet — estágio 06)
-- [x] `data/mask_utils.py` (uma função por fonte de ground truth), `data/gee_client.py`
-- [x] `data/mask_comparison.py` (diagnóstico comparativo das fontes — estágio 03)
-- [x] `data/mask_finalization.py` (finalização da máscara — estágio 04)
-- [x] `data/preprocessing.py` (alinhamento e normalização do composite — estágio 05)
-- [x] `data/spatial_split.py` (divisão espacial k-fold do manifesto — estágio 07)
-- [x] `data/eda.py` (estatísticas de normalização + sanidade do dataset — estágio 08)
+- [x] `data/mask_utils.py` (uma função por fonte de ground truth, com `year` próprio por fonte), `data/gee_client.py`
+- [x] `data/mask_comparison.py` (diagnóstico comparativo de todas as fontes — estágio 03)
+- [x] `data/source_decision.py` (registro da decisão manual da fonte — estágio 04)
+- [x] `data/preprocessing.py` (alinhamento e normalização do composite por ano — estágio 05)
+- [x] `data/patch_generation.py` (patches 512x512 por fonte + manifesto Parquet — estágio 06)
+- [x] `data/spatial_split.py` (divisão espacial k-fold do manifesto por fonte — estágio 07)
+- [x] `data/eda.py` (estatísticas de normalização + sanidade do dataset por fonte — estágio 08)
+- [x] `data/emater_masks.py` (máscara vetorial da Emater — estágio 02)
 - [x] `losses.py` (Dice + Focal + Boundary, com pesos de config.yaml)
 - [x] `metrics.py` (IoU, F1, Precision, Recall com acumulador por época)
 - [x] `trainer.py` (protocolo de treino único, parametrizado pelo modelo — sem duplicação entre notebooks 09/10)
@@ -201,7 +203,7 @@ Cada notebook é um estágio isolado com uma única responsabilidade e entradas/
 
 ## 9. Riscos e decisões em aberto
 
-- **Fonte de ground truth** é o principal risco (MapBiomas vs AlphaEarth vs S2DR3/S2DR4) — cada fonte tem sua própria célula de integração e subpasta no Drive; a escolha é tratada na Fase 2 antes de qualquer treino.
+- **Fonte de ground truth** é o principal risco (MapBiomas 2025 vs AlphaEarth 2024 vs Emater 2018 — anos distintos) — cada fonte tem sua própria célula de integração, subpasta no Drive e conjunto de patches; a escolha da fonte de treino é uma decisão **manual** do pesquisador registrada na Fase 2 (estágio 04), antes de qualquer treino.
 - **CRS/georreferenciamento** dos rótulos vs a grade do Sentinel (zona UTM para MG).
 - **OAuth do GEE no Kaggle** (fluxo headless do `ee.Authenticate()` + persistência do token entre sessões) — validado no notebook `00`.
 - **Montagem do Drive no Kaggle** (sem montagem nativa — Drive API via token OAuth `GDRIVE_TOKEN`/`GDRIVE_TOKEN_FILE` + cache local) — deve ser validada no notebook `00` antes de qualquer escrita de armazenamento; a abstração do `src/` isola isso do código dos notebooks.

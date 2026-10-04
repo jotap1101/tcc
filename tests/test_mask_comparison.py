@@ -103,6 +103,13 @@ def test_compute_comparison_areas() -> None:
     assert comparison["coffee_share"]["mapbiomas"] == pytest.approx(2 / 16)
 
 
+def test_compute_comparison_reports_native_resolution() -> None:
+    """O relatório deve registrar a resolução nativa de cada fonte (transparência)."""
+    comparison = compute_comparison(_sample_mask_set(), "mapbiomas")
+    assert comparison["native_resolution_m"]["mapbiomas"] == 30
+    assert comparison["native_resolution_m"]["alphaearth"] == 10
+
+
 def test_compute_comparison_invalid_reference() -> None:
     """Uma fonte de referência inexistente deve levantar ValueError."""
     with pytest.raises(ValueError):

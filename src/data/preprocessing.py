@@ -20,7 +20,7 @@ import numpy as np
 
 from src.config import get_config
 from src.data.mask_comparison import display_array
-from src.data.mask_utils import active_year
+from src.data.mask_utils import active_year, reference_mask_for_year
 from src.data.raster_utils import percentile_stretch, render_figure, same_grid
 
 REFLECTANCE_SCALE = 1e-4  # fator de escala das bandas de reflectância do Sentinel-2
@@ -149,12 +149,12 @@ def build_preprocessed_composite(
     """Garante o composite alinhado e normalizado no caminho canônico (idempotente).
 
     Se o composite já existir, é reutilizado; caso contrário, o mosaico do estágio
-    01 é alinhado ao grid da máscara final do estágio 04 e normalizado, com o
-    GeoTIFF persistido em data/processed/composites/ (streaming no Kaggle).
+    01 é alinhado ao grid da máscara de referência do ano (a primeira fonte
+    habilitada com aquele ano) e normalizado, com o GeoTIFF persistido em
+    data/processed/composites/ (streaming no Kaggle).
     O ano opcional permite gerar composites de outros períodos (ex.: 2018).
     """
     from src import io
-    from src.data.mask_finalization import final_mask_path
 
     target_path = composite_path(storage_paths, year)
     if io.path_exists(target_path):
@@ -162,12 +162,13 @@ def build_preprocessed_composite(
         return target_path
 
     start, end = _year_dates(year)
+    active = int(year or active_year())
+    mask_local = io.ensure_local_copy(reference_mask_for_year(storage_paths, active))
     mosaic_local = io.ensure_local_copy(mosaic_path(storage_paths, start, end))
-    mask_local = io.ensure_local_copy(final_mask_path(storage_paths))
     if not mosaic_local.is_file():
         raise FileNotFoundError(f"Mosaico do estágio 01 não encontrado: {mosaic_local}")
     if not mask_local.is_file():
-        raise FileNotFoundError(f"Máscara final do estágio 04 não encontrada: {mask_local}")
+        raise FileNotFoundError(f"Máscara de referência do ano não encontrada: {mask_local}")
 
     composite = load_aligned_mosaic(mosaic_local, mask_local)
     normalized = normalize_reflectance(composite.array)
@@ -201,10 +202,10 @@ def verify_composite(storage_paths: dict[str, Path], year: int | None = None) ->
     import rasterio
 
     from src import io
-    from src.data.mask_finalization import final_mask_path
 
+    active = int(year or active_year())
     composite_local = io.ensure_local_copy(composite_path(storage_paths, year))
-    mask_local = io.ensure_local_copy(final_mask_path(storage_paths))
+    mask_local = io.ensure_local_copy(reference_mask_for_year(storage_paths, active))
     with rasterio.open(composite_local) as composite, rasterio.open(mask_local) as mask:
         shape = (int(composite.height), int(composite.width))
         crs = str(composite.crs)

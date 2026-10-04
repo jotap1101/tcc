@@ -44,18 +44,35 @@ def active_year() -> int:
 
 
 def required_data_years() -> list[int]:
-    """Anos de dados necessários: o ano global e os anos explícitos das fontes."""
+    """Anos de dados necessários, derivados das fontes habilitadas.
+
+    Cada fonte habilitada contribui com o seu `year` próprio (mais recente
+    disponível); o ano global (data.dates) entra apenas como fallback para
+    fontes sem `year` explícito.
+    """
     config = get_config()
-    years = {reference_year()}
+    years: set[int] = set()
     for _, source_cfg in config["ground_truth"]["sources"].items():
-        if source_cfg.get("enabled") and source_cfg.get("year") is not None:
-            years.add(int(source_cfg["year"]))
+        if not source_cfg.get("enabled"):
+            continue
+        year = source_cfg.get("year")
+        years.add(int(year) if year is not None else reference_year())
     return sorted(years)
 
 
 def mask_file_name(source: str, region_code: str, year: int) -> str:
-    """Gera o nome estável do arquivo de máscara, derivado da configuração."""
-    return f"mask_{source}_{region_code}_{year}"
+    """Gera o nome estável do arquivo de máscara, derivado da configuração.
+
+    Fontes limiarizadas (ex.: AlphaEarth, com `probability_threshold`) embutem o
+    limiar no nome — recalibrar o limiar gera um novo arquivo, preservando a
+    idempotência (nunca reutiliza uma máscara de outro limiar silenciosamente).
+    """
+    base = f"mask_{source}_{region_code}_{year}"
+    source_cfg = get_config()["ground_truth"]["sources"].get(source, {})
+    threshold = source_cfg.get("probability_threshold")
+    if threshold is not None:
+        base += f"_t{int(float(threshold) * 100):03d}"
+    return base
 
 
 def source_mask_path(source_name: str, storage_paths: dict[str, Path]) -> Path:
@@ -66,27 +83,48 @@ def source_mask_path(source_name: str, storage_paths: dict[str, Path]) -> Path:
     return storage_paths["data_interim"] / source_name / f"{file_prefix}.tif"
 
 
+def reference_mask_for_year(storage_paths: dict[str, Path], year: int) -> Path:
+    """Máscara de referência de um ano: a da primeira fonte habilitada com aquele ano.
+
+    Usada para alinhar o composite anual ao grid das máscaras que compartilham
+    aquele ano (todas as fontes hoje compartilham o mesmo grid de 10 m do AOI).
+    """
+    config = get_config()
+    for name, source_cfg in config["ground_truth"]["sources"].items():
+        if source_cfg.get("enabled") and reference_year(name) == year:
+            return source_mask_path(name, storage_paths)
+    raise ValueError(f"Nenhuma fonte habilitada com ano de referência {year}.")
+
+
 def build_mapbiomas_mask(aoi: Any) -> Any:
     """Máscara binária de café da MapBiomas (classe 46) para o ano de referência.
 
-    A coleção integrada possui uma banda `classification_<ano>` por ano;
-    a máscara equivale aos pixels da classe café (3.2.2.1) recortados ao AOI.
+    A coleção consolidada do MapBiomas é um ImageCollection filtrado por
+    `collection_filter` (número da coleção) e `year`; a máscara equivale aos
+    pixels da classe café (3.2.2.1) recortados ao AOI.
     """
     import ee
 
     source = get_config()["ground_truth"]["sources"]["mapbiomas"]
-    image = ee.Image(source["collection_id"]).select(
-        f"classification_{reference_year('mapbiomas')}"
+    year = reference_year("mapbiomas")
+    collection = ee.ImageCollection(source["collection_id"]).filter(
+        ee.Filter.eq("collection_id", int(source["collection_filter"]))
     )
+    if collection.size().getInfo() == 0:
+        raise ValueError(
+            "Coleção consolidada do MapBiomas vazia; ajuste collection_filter/"
+            "year em config.yaml (fallback: coleção 10, ano 2024)."
+        )
+    image = collection.filter(ee.Filter.eq("year", year)).mosaic().select("classification")
     return image.eq(source["coffee_class"]).clip(aoi).rename(MASK_BAND)
 
 
 def build_alphaearth_mask(aoi: Any) -> Any:
     """Máscara binária de café do modelo de probabilidade da AlphaEarth (FDaP).
 
-    O modelo do Forest Data Partnership (2025a), derivado dos embeddings do
-    AlphaEarth Foundations, fornece a banda `probability` por ano; a máscara
-    aplica o limiar configurado em config.yaml para o ano de referência.
+    O modelo do Forest Data Partnership (2025b, embeddings do AlphaEarth
+    Foundations) fornece a banda `probability` por ano; a máscara aplica o
+    limiar configurado em config.yaml para o ano de referência da fonte.
     """
     import ee
 

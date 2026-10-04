@@ -18,6 +18,8 @@ from src.data.dataset import (
     normalize_patch,
 )
 
+TEST_SOURCE = "alphaearth"
+
 
 def _stats() -> dict:
     """Estatísticas de normalização sintéticas (média 100, desvio 10 por banda)."""
@@ -32,6 +34,7 @@ def _storage_paths(tmp_path) -> dict:
     """Caminhos de armazenamento mínimos para os testes do estágio 09."""
     return {
         "data_processed": tmp_path / "data" / "processed",
+        "data_interim": tmp_path / "data" / "interim",
         "data_processed_patches": tmp_path / "data" / "processed" / "patches",
         "models": tmp_path / "models",
         "artifacts_metrics": tmp_path / "artifacts" / "metrics",
@@ -78,9 +81,9 @@ def _manifest_with_patches(tmp_path) -> tuple[dict, pd.DataFrame, dict]:
     manifest = pd.DataFrame(records)
     processed = paths["data_processed"]
     processed.mkdir(parents=True, exist_ok=True)
-    manifest.to_parquet(processed / "manifest.parquet", index=False)
+    manifest.to_parquet(processed / f"manifest_{TEST_SOURCE}.parquet", index=False)
     stats = _stats()
-    (processed / "normalization_stats.json").write_text(
+    (processed / f"normalization_stats_{TEST_SOURCE}.json").write_text(
         json.dumps(stats, ensure_ascii=False), encoding="utf-8"
     )
     return paths, manifest, stats
@@ -139,7 +142,7 @@ def test_load_normalization_stats_requires_stage08(tmp_path) -> None:
     """Sem as estatísticas do estágio 08, a carga deve falhar."""
     paths = _storage_paths(tmp_path)
     with pytest.raises(FileNotFoundError, match="estágio 08"):
-        load_normalization_stats(paths)
+        load_normalization_stats(paths, TEST_SOURCE)
 
 
 def test_patch_dataset_getitem_shapes(tmp_path) -> None:
@@ -157,7 +160,9 @@ def test_patch_dataset_getitem_shapes(tmp_path) -> None:
 def test_build_loaders_returns_train_and_val(tmp_path) -> None:
     """build_loaders deve dividir treino/validação pela dobra e embaralhar o treino."""
     paths, manifest, _ = _manifest_with_patches(tmp_path)
-    train_loader, val_loader = build_loaders(paths, fold=0, batch_size=2, seed=42, num_workers=0)
+    train_loader, val_loader = build_loaders(
+        paths, TEST_SOURCE, fold=0, batch_size=2, seed=42, num_workers=0
+    )
     train_idx, val_idx = fold_indices(manifest, fold=0)
     assert len(train_idx) == 4  # dobras 1 e 2
     assert len(val_idx) == 2  # dobra 0
@@ -174,8 +179,8 @@ def test_build_loaders_requires_folds(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr("src.io.detect_platform", lambda: "local")
     paths, _, stats = _manifest_with_patches(tmp_path)
-    manifest = pd.read_parquet(paths["data_processed"] / "manifest.parquet")
+    manifest = pd.read_parquet(paths["data_processed"] / f"manifest_{TEST_SOURCE}.parquet")
     manifest["fold"] = None
-    manifest.to_parquet(paths["data_processed"] / "manifest.parquet", index=False)
+    manifest.to_parquet(paths["data_processed"] / f"manifest_{TEST_SOURCE}.parquet", index=False)
     with pytest.raises(ValueError, match="estágio 07"):
-        build_loaders(paths, fold=0, batch_size=2, seed=42, num_workers=0)
+        build_loaders(paths, TEST_SOURCE, fold=0, batch_size=2, seed=42, num_workers=0)

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from src.config import get_config
-from src.data.mask_finalization import final_mask_path
+from src.data.mask_utils import source_mask_path
 from src.data.preprocessing import (
     build_preprocessed_composite,
     composite_file_name,
@@ -16,6 +16,8 @@ from src.data.preprocessing import (
     save_composite_preview,
     verify_composite,
 )
+
+TEST_SOURCE = "alphaearth"
 
 
 def _write_geotiff(path, array, transform, crs="EPSG:31983") -> None:
@@ -42,14 +44,14 @@ def _storage_paths(tmp_path) -> dict:
     """Caminhos de armazenamento mínimos para os testes do estágio 05."""
     return {
         "data_raw_sentinel2": tmp_path / "data" / "raw" / "sentinel2",
-        "data_processed_ground_truth": tmp_path / "data" / "processed" / "ground_truth",
+        "data_interim": tmp_path / "data" / "interim",
         "data_processed_composites": tmp_path / "data" / "processed" / "composites",
         "artifacts_figures": tmp_path / "artifacts" / "figures",
     }
 
 
 def _write_inputs(tmp_path, monkeypatch, mask_offset=0.0):
-    """Escreve mosaico (4 bandas) e máscara final em grids possivelmente distintos."""
+    """Escreve mosaico (4 bandas) e máscara da fonte em grids possivelmente distintos."""
     from rasterio.transform import from_origin
 
     monkeypatch.setattr("src.io.detect_platform", lambda: "local")
@@ -63,7 +65,7 @@ def _write_inputs(tmp_path, monkeypatch, mask_offset=0.0):
 
     mask = np.zeros((4, 4), dtype=np.uint8)
     mask[0, 0] = 1
-    mask_file = final_mask_path(paths)
+    mask_file = source_mask_path(TEST_SOURCE, paths)
     mask_file.parent.mkdir(parents=True)
     _write_geotiff(mask_file, mask, from_origin(mask_offset, 4, 10, 10))
 
@@ -169,7 +171,7 @@ def test_build_preprocessed_composite_requires_mosaic(tmp_path, monkeypatch) -> 
     monkeypatch.setattr("src.io.detect_platform", lambda: "local")
     paths = _storage_paths(tmp_path)
     mask = np.zeros((4, 4), dtype=np.uint8)
-    mask_file = final_mask_path(paths)
+    mask_file = source_mask_path(TEST_SOURCE, paths)
     mask_file.parent.mkdir(parents=True)
     _write_geotiff(mask_file, mask, from_origin(0, 4, 10, 10))
     with pytest.raises(FileNotFoundError, match="estágio 01"):
@@ -177,7 +179,7 @@ def test_build_preprocessed_composite_requires_mosaic(tmp_path, monkeypatch) -> 
 
 
 def test_build_preprocessed_composite_requires_mask(tmp_path, monkeypatch) -> None:
-    """Sem a máscara final do estágio 04, a construção deve falhar."""
+    """Sem a máscara de referência do ano, a construção deve falhar."""
     from rasterio.transform import from_origin
 
     monkeypatch.setattr("src.io.detect_platform", lambda: "local")
@@ -186,7 +188,7 @@ def test_build_preprocessed_composite_requires_mask(tmp_path, monkeypatch) -> No
     mosaic_file = mosaic_path(paths)
     mosaic_file.parent.mkdir(parents=True)
     _write_geotiff(mosaic_file, mosaic, from_origin(0, 4, 10, 10))
-    with pytest.raises(FileNotFoundError, match="estágio 04"):
+    with pytest.raises(FileNotFoundError, match="Máscara de referência"):
         build_preprocessed_composite(paths)
 
 

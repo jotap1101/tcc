@@ -29,14 +29,15 @@ from src.data.patch_generation import (
 )
 
 
-def load_normalization_stats(storage_paths: dict[str, Path]) -> dict[str, Any]:
-    """Carrega as estatísticas de normalização do estágio 08 (falha se ausente)."""
+def load_normalization_stats(storage_paths: dict[str, Path], source_name: str) -> dict[str, Any]:
+    """Carrega as estatísticas de normalização da fonte do estágio 08 (falha se ausente)."""
     from src import io
 
-    stats_path = normalization_stats_path(storage_paths)
+    stats_path = normalization_stats_path(storage_paths, source_name)
     if not io.path_exists(stats_path):
         raise FileNotFoundError(
-            f"Estatísticas de normalização (estágio 08) não encontradas: {stats_path}"
+            f"Estatísticas de normalização da fonte {source_name} (estágio 08) "
+            f"não encontradas: {stats_path}"
         )
     local_stats = io.ensure_local_copy(stats_path)
     return json.loads(local_stats.read_text(encoding="utf-8"))
@@ -136,22 +137,23 @@ class PatchDataset(Dataset):
 
 def build_loaders(
     storage_paths: dict[str, Path],
+    source_name: str,
     fold: int,
     batch_size: int,
     seed: int,
     num_workers: int = 0,
     transform: SegmentAugmentation | None = None,
 ) -> tuple[DataLoader, DataLoader]:
-    """Constroi os DataLoaders de treino e validação de uma dobra (determinístico).
+    """Constroi os DataLoaders de treino e validação de uma dobra da fonte (determinístico).
 
     O shuffle do treino usa um gerador próprio fixado com a semente da dobra;
     a validação percorre os patches sem embaralhar.
     """
-    require_manifest(storage_paths)
-    manifest = load_manifest(storage_paths)
+    require_manifest(storage_paths, source_name)
+    manifest = load_manifest(storage_paths, source_name)
     if not manifest_has_folds(manifest):
         raise ValueError("Coluna fold ausente/incompleta; execute o estágio 07 antes.")
-    stats = load_normalization_stats(storage_paths)
+    stats = load_normalization_stats(storage_paths, source_name)
     train_idx, val_idx = fold_indices(manifest, fold)
     train_dataset = PatchDataset(
         manifest.iloc[train_idx], storage_paths, stats, transform=transform

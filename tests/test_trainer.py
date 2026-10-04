@@ -25,11 +25,14 @@ from src.trainer import (
     weights_path,
 )
 
+TEST_SOURCE = "alphaearth"
+
 
 def _storage_paths(tmp_path) -> dict:
     """Caminhos de armazenamento mínimos para os testes do estágio 09."""
     return {
         "data_processed": tmp_path / "data" / "processed",
+        "data_interim": tmp_path / "data" / "interim",
         "data_processed_composites": tmp_path / "data" / "processed" / "composites",
         "data_processed_ground_truth": tmp_path / "data" / "processed" / "ground_truth",
         "data_processed_patches": tmp_path / "data" / "processed" / "patches",
@@ -95,8 +98,8 @@ def _write_dataset(tmp_path) -> dict:
                 "mask_path": mask_path,
             }
         )
-    pd.DataFrame(records).to_parquet(processed / "manifest.parquet", index=False)
-    (processed / "normalization_stats.json").write_text(
+    pd.DataFrame(records).to_parquet(processed / f"manifest_{TEST_SOURCE}.parquet", index=False)
+    (processed / f"normalization_stats_{TEST_SOURCE}.json").write_text(
         json.dumps(stats, ensure_ascii=False), encoding="utf-8"
     )
     return paths
@@ -110,15 +113,21 @@ def _small_model() -> UNet:
 def test_artifact_paths_follow_schema() -> None:
     """Os caminhos de artefatos devem seguir o schema do PLAN.md."""
     paths = _storage_paths(Path("/tmp"))
-    assert str(weights_path(paths, "unet", 2)).endswith("models/unet/fold_2.pt")
-    assert str(metrics_path(paths, "unet", 2)).endswith("artifacts/metrics/unet/fold_2.json")
-    assert str(history_path(paths, "unet", 2)).endswith("artifacts/runs/unet/fold_2.json")
+    assert str(weights_path(paths, "unet", TEST_SOURCE, 2)).endswith(
+        "models/unet/alphaearth/fold_2.pt"
+    )
+    assert str(metrics_path(paths, "unet", TEST_SOURCE, 2)).endswith(
+        "artifacts/metrics/unet/alphaearth/fold_2.json"
+    )
+    assert str(history_path(paths, "unet", TEST_SOURCE, 2)).endswith(
+        "artifacts/runs/unet/alphaearth/fold_2.json"
+    )
 
 
 def test_fold_training_done_false_when_missing(tmp_path) -> None:
     """Sem artefatos, a dobra deve ser considerada não treinada."""
     paths = _storage_paths(tmp_path)
-    assert not fold_training_done(paths, "unet", 0)
+    assert not fold_training_done(paths, "unet", TEST_SOURCE, 0)
 
 
 def test_train_fold_persists_artifacts(tmp_path, monkeypatch) -> None:
@@ -127,18 +136,20 @@ def test_train_fold_persists_artifacts(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("src.trainer.get_config", lambda: _training_config())
     paths = _write_dataset(tmp_path)
 
-    result = train_fold(_small_model(), "unet", paths, fold=0, device=torch.device("cpu"))
+    result = train_fold(
+        _small_model(), "unet", paths, fold=0, device=torch.device("cpu"), source_name=TEST_SOURCE
+    )
 
     assert isinstance(result, FoldResult)
     assert result.fold == 0
     assert result.epochs == 1
     assert not result.skipped
-    assert weights_path(paths, "unet", 0).is_file()
-    assert metrics_path(paths, "unet", 0).is_file()
-    assert history_path(paths, "unet", 0).is_file()
-    assert fold_training_done(paths, "unet", 0)
+    assert weights_path(paths, "unet", TEST_SOURCE, 0).is_file()
+    assert metrics_path(paths, "unet", TEST_SOURCE, 0).is_file()
+    assert history_path(paths, "unet", TEST_SOURCE, 0).is_file()
+    assert fold_training_done(paths, "unet", TEST_SOURCE, 0)
 
-    payload = json.loads(metrics_path(paths, "unet", 0).read_text(encoding="utf-8"))
+    payload = json.loads(metrics_path(paths, "unet", TEST_SOURCE, 0).read_text(encoding="utf-8"))
     assert payload["model"] == "unet"
     assert payload["fold"] == 0
     assert set(payload["val"]) == {
@@ -158,13 +169,17 @@ def test_train_fold_skips_when_done(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("src.io.detect_platform", lambda: "local")
     monkeypatch.setattr("src.trainer.get_config", lambda: _training_config())
     paths = _write_dataset(tmp_path)
-    train_fold(_small_model(), "unet", paths, fold=0, device=torch.device("cpu"))
+    train_fold(
+        _small_model(), "unet", paths, fold=0, device=torch.device("cpu"), source_name=TEST_SOURCE
+    )
 
-    mtime = weights_path(paths, "unet", 0).stat().st_mtime_ns
-    result = train_fold(_small_model(), "unet", paths, fold=0, device=torch.device("cpu"))
+    mtime = weights_path(paths, "unet", TEST_SOURCE, 0).stat().st_mtime_ns
+    result = train_fold(
+        _small_model(), "unet", paths, fold=0, device=torch.device("cpu"), source_name=TEST_SOURCE
+    )
 
     assert result.skipped
-    assert weights_path(paths, "unet", 0).stat().st_mtime_ns == mtime
+    assert weights_path(paths, "unet", TEST_SOURCE, 0).stat().st_mtime_ns == mtime
 
 
 def test_train_fold_force_retrains(tmp_path, monkeypatch) -> None:
@@ -172,10 +187,18 @@ def test_train_fold_force_retrains(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("src.io.detect_platform", lambda: "local")
     monkeypatch.setattr("src.trainer.get_config", lambda: _training_config())
     paths = _write_dataset(tmp_path)
-    train_fold(_small_model(), "unet", paths, fold=0, device=torch.device("cpu"))
+    train_fold(
+        _small_model(), "unet", paths, fold=0, device=torch.device("cpu"), source_name=TEST_SOURCE
+    )
 
     result = train_fold(
-        _small_model(), "unet", paths, fold=0, device=torch.device("cpu"), force=True
+        _small_model(),
+        "unet",
+        paths,
+        fold=0,
+        device=torch.device("cpu"),
+        force=True,
+        source_name=TEST_SOURCE,
     )
     assert not result.skipped
 
@@ -186,15 +209,16 @@ def test_run_metadata_and_save(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("src.trainer.get_config", lambda: _training_config())
     paths = _write_dataset(tmp_path)
 
-    meta = run_metadata("unet", paths)
+    meta = run_metadata("unet", paths, TEST_SOURCE)
     assert meta["model"] == "unet"
+    assert meta["source_name"] == TEST_SOURCE
     assert meta["fold_count"] == int(get_config()["splits"]["fold_count"])
     assert meta["seed"] == 42
     assert meta["epochs"] == 1
     assert "manifest_fingerprint_hash" in meta
     assert "environment" in meta
 
-    saved = save_run_metadata(paths, "unet")
+    saved = save_run_metadata(paths, "unet", TEST_SOURCE)
     assert saved.is_file()
     assert json.loads(saved.read_text(encoding="utf-8"))["model"] == "unet"
 
@@ -204,8 +228,10 @@ def test_build_loaders_works_with_training_config(tmp_path) -> None:
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr("src.io.detect_platform", lambda: "local")
     paths = _write_dataset(tmp_path)
-    train_loader, val_loader = build_loaders(paths, fold=0, batch_size=2, seed=42, num_workers=0)
-    manifest = pd.read_parquet(paths["data_processed"] / "manifest.parquet")
+    train_loader, val_loader = build_loaders(
+        paths, TEST_SOURCE, fold=0, batch_size=2, seed=42, num_workers=0
+    )
+    manifest = pd.read_parquet(paths["data_processed"] / f"manifest_{TEST_SOURCE}.parquet")
     train_idx, val_idx = fold_indices(manifest, fold=0)
     assert len(train_idx) == 4
     assert len(val_idx) == 2

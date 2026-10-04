@@ -1,15 +1,16 @@
-"""Divisão espacial k-fold dos patches (estágio 07).
+"""Divisão espacial k-fold dos patches por fonte (estágio 07).
 
-Atribui cada patch registrado no manifesto do estágio 06 a uma das k dobras
-(`splits.fold_count`) por proximidade geográfica: os centroides das bboxes são
-agrupados com k-means determinístico (implementado em numpy puro, k-means++ com
-semente fixa) e os grupos são rotulados de forma determinística pela posição dos
-centros. A contiguidade espacial dos grupos reduz o vazamento por autocorrelação
-espacial entre treino e validação nos estágios 09/10. A divisão é gravada na
-coluna `fold` do próprio manifesto e versionada em split.meta.json (fingerprint
-do manifesto + dobras + semente); execuções repetidas reutilizam a divisão
-vigente sem reprocessamento. A implementação em numpy puro evita dependência do
-scikit-learn (cuja importação de numpy.testing é sensível a versões do numpy).
+Atribui cada patch registrado no manifesto de uma fonte do estágio 06 a uma das
+k dobras (`splits.fold_count`) por proximidade geográfica: os centroides das
+bboxes são agrupados com k-means determinístico (implementado em numpy puro,
+k-means++ com semente fixa) e os grupos são rotulados de forma determinística
+pela posição dos centros. A contiguidade espacial dos grupos reduz o vazamento
+por autocorrelação espacial entre treino e validação nos estágios 09/10. A
+divisão é gravada na coluna `fold` do manifesto de cada fonte e versionada em
+split_<fonte>.meta.json (fingerprint do manifesto + dobras + semente); execuções
+repetidas reutilizam a divisão vigente sem reprocessamento. A implementação em
+numpy puro evita dependência do scikit-learn (cuja importação de numpy.testing
+é sensível a versões do numpy).
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 from src.config import get_config
-from src.data.mask_utils import active_year
+from src.data.mask_utils import reference_year
 from src.data.patch_generation import (
     load_manifest,
     manifest_path,
@@ -34,9 +35,9 @@ from src.data.patch_generation import (
 SPLIT_SCHEMA_VERSION = 1
 
 
-def split_meta_path(storage_paths: dict[str, Path]) -> Path:
-    """Caminho do metadata da divisão (fingerprint para idempotência)."""
-    return storage_paths["data_processed"] / "split.meta.json"
+def split_meta_path(storage_paths: dict[str, Path], source_name: str) -> Path:
+    """Caminho do metadata da divisão da fonte (fingerprint para idempotência)."""
+    return storage_paths["data_processed"] / f"split_{source_name}.meta.json"
 
 
 def fold_count() -> int:
@@ -115,33 +116,34 @@ def spatial_fold_centroids(centroids: np.ndarray, k: int, seed: int) -> np.ndarr
     return np.array([relabel[int(label)] for label in labels])
 
 
-def split_meta_payload(storage_paths: dict[str, Path]) -> dict[str, Any]:
-    """Payload do metadata da divisão (fingerprint + dobras + semente)."""
+def split_meta_payload(storage_paths: dict[str, Path], source_name: str) -> dict[str, Any]:
+    """Payload do metadata da divisão da fonte (fingerprint + dobras + semente)."""
     return {
         "schema_version": SPLIT_SCHEMA_VERSION,
-        "manifest_fingerprint_hash": patch_fingerprint_hash(storage_paths),
+        "source_name": source_name,
+        "manifest_fingerprint_hash": patch_fingerprint_hash(storage_paths, source_name),
         "fold_count": fold_count(),
         "seed": split_seed(),
     }
 
 
-def split_is_current(storage_paths: dict[str, Path]) -> bool:
-    """Indica se a divisão persistida está vigente frente às entradas atuais."""
+def split_is_current(storage_paths: dict[str, Path], source_name: str) -> bool:
+    """Indica se a divisão persistida da fonte está vigente frente às entradas atuais."""
     from src import io
 
-    if not io.path_exists(manifest_path(storage_paths)):
+    if not io.path_exists(manifest_path(storage_paths, source_name)):
         return False
-    if not io.path_exists(split_meta_path(storage_paths)):
+    if not io.path_exists(split_meta_path(storage_paths, source_name)):
         return False
-    local_meta = io.ensure_local_copy(split_meta_path(storage_paths))
+    local_meta = io.ensure_local_copy(split_meta_path(storage_paths, source_name))
     try:
         stored = json.loads(local_meta.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return False
-    current = split_meta_payload(storage_paths)
+    current = split_meta_payload(storage_paths, source_name)
     if any(stored.get(key) != value for key, value in current.items()):
         return False
-    return bool(load_manifest(storage_paths)["fold"].notna().all())
+    return bool(load_manifest(storage_paths, source_name)["fold"].notna().all())
 
 
 def _write_manifest(path: Path, manifest: pd.DataFrame, storage_paths: dict[str, Path]) -> None:
@@ -160,34 +162,38 @@ def _write_meta(path: Path, payload: dict[str, Any], storage_paths: dict[str, Pa
     io.persist_bytes(path, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
 
 
-def assign_spatial_folds(storage_paths: dict[str, Path]) -> Path:
-    """Garante a divisão espacial k-fold no manifesto (idempotente).
+def assign_spatial_folds(storage_paths: dict[str, Path], source_name: str) -> Path:
+    """Garante a divisão espacial k-fold no manifesto da fonte (idempotente).
 
     Reutiliza a divisão quando o metadata persistido coincide com o atual
     (fingerprint do manifesto, dobras e semente) e a coluna `fold` está preenchida;
     caso contrário, agrupa os patches por proximidade geográfica e grava a coluna
     `fold` no manifesto do estágio 06.
     """
-    manifest_file = manifest_path(storage_paths)
-    if split_is_current(storage_paths):
-        print(f"Divisão já existente e atual (reutilizada): {manifest_file}")
+    manifest_file = manifest_path(storage_paths, source_name)
+    if split_is_current(storage_paths, source_name):
+        print(f"Divisão {source_name} já existente e atual (reutilizada): {manifest_file}")
         return manifest_file
 
-    require_manifest(storage_paths)
-    manifest = load_manifest(storage_paths)
+    require_manifest(storage_paths, source_name)
+    manifest = load_manifest(storage_paths, source_name)
     k = fold_count()
     seed = split_seed()
     centroids = np.array([bbox_centroid(value) for value in manifest["bbox"]])
     manifest["fold"] = spatial_fold_centroids(centroids, k, seed)
     _write_manifest(manifest_file, manifest, storage_paths)
-    _write_meta(split_meta_path(storage_paths), split_meta_payload(storage_paths), storage_paths)
+    _write_meta(
+        split_meta_path(storage_paths, source_name),
+        split_meta_payload(storage_paths, source_name),
+        storage_paths,
+    )
     print(f"Divisão espacial k-fold salva em: {manifest_file}")
     return manifest_file
 
 
-def verify_split(storage_paths: dict[str, Path]) -> dict[str, Any]:
-    """Verifica a divisão: contagens, café e localização média por dobra."""
-    manifest = load_manifest(storage_paths)
+def verify_split(storage_paths: dict[str, Path], source_name: str) -> dict[str, Any]:
+    """Verifica a divisão da fonte: contagens, café e localização média por dobra."""
+    manifest = load_manifest(storage_paths, source_name)
     k = fold_count()
     per_fold = []
     for fold in range(k):
@@ -210,22 +216,25 @@ def verify_split(storage_paths: dict[str, Path]) -> dict[str, Any]:
     }
 
 
-def split_figure_file_name() -> str:
-    """Nome estável da figura da divisão espacial, derivado da configuração."""
+def split_figure_file_name(source_name: str) -> str:
+    """Nome estável da figura da divisão espacial da fonte, derivado da configuração."""
     config = get_config()
-    return f"split_kfold_{config['aoi']['region_code']}_{active_year()}.png"
+    return (
+        f"split_kfold_{config['aoi']['region_code']}_{reference_year(source_name)}"
+        f"_{source_name}.png"
+    )
 
 
-def save_split_figure(storage_paths: dict[str, Path]) -> Path:
-    """Persiste a figura da divisão espacial no Drive canônico (idempotente)."""
+def save_split_figure(storage_paths: dict[str, Path], source_name: str) -> Path:
+    """Persiste a figura da divisão espacial da fonte no Drive canônico (idempotente)."""
     from src import io
 
-    figure_path = storage_paths["artifacts_figures"] / split_figure_file_name()
+    figure_path = storage_paths["artifacts_figures"] / split_figure_file_name(source_name)
     if io.path_exists(figure_path):
         print(f"Figura já existente (reutilizada): {figure_path}")
         return figure_path
 
-    manifest = load_manifest(storage_paths)
+    manifest = load_manifest(storage_paths, source_name)
     io.persist_bytes(figure_path, render_split_figure(manifest))
     print(f"Figura salva em: {figure_path}")
     return figure_path

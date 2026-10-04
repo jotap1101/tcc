@@ -81,6 +81,7 @@ def export_image_to_drive(
     file_name_prefix: str,
     region: Any,
     scale: int,
+    resampling: str = "near",
 ) -> Any:
     """Dispara a exportação de uma imagem em GeoTIFF para o Drive (assíncrona).
 
@@ -88,8 +89,11 @@ def export_image_to_drive(
     do Drive — subcaminhos como ``tcc/data/raw`` são tratados como nome literal
     e criam uma pasta com barras na raiz. Por isso o export é feito para uma
     pasta plana e o arquivo é realocado depois por io.relocate_exported_file().
-    CRS, escala e limite de pixels vêm de src/config.yaml (fonte única de verdade);
-    a reamostragem padrão do GEE (near) preserva valores categóricos (0/1).
+    CRS, escala e limite de pixels vêm de src/config.yaml (fonte única de verdade).
+    ``resampling`` controla a reamostragem quando a resolução nativa difere da
+    escala de exportação: ``near`` (vizinho mais próximo, padrão) preserva
+    valores categóricos (0/1) de máscaras — essencial ao exportar ground truth
+    de 30 m (ex.: MapBiomas) para o grid de 10 m do Sentinel-2.
     """
     import ee
 
@@ -98,6 +102,10 @@ def export_image_to_drive(
             f"folder do GEE deve ser um único nome de pasta (sem separadores): {folder!r}"
         )
     config = get_config()
+    # Define explicitamente a reamostragem usada ao reprojetar para o CRS/escala
+    # de exportação (near preserva classes; bilinear interpolaria e criaria
+    # valores não binários na máscara).
+    image = image.resample(resampling)
     task = ee.batch.Export.image.toDrive(
         image=image,
         description=description,

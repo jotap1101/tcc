@@ -9,6 +9,7 @@ O processamento é determinístico e as persistências são idempotentes.
 
 from __future__ import annotations
 
+import itertools
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -83,6 +84,16 @@ def _read_on_reference_grid(
     return destination > 0
 
 
+def native_resolution_m(source_name: str) -> int:
+    """Resolução nativa (m) da fonte de ground truth, declarada em config.yaml.
+
+    Fontes com resolução diferente da escala de processamento (10 m) são
+    reamostradas na exportação do GEE (near) para o grid do Sentinel-2.
+    """
+    source_cfg = get_config()["ground_truth"]["sources"].get(source_name, {})
+    return int(source_cfg.get("native_resolution_m", 10))
+
+
 def compute_comparison(mask_set: MaskSet, reference: str) -> dict[str, Any]:
     """Calcula o diagnóstico comparativo entre as fontes (áreas e concordância).
 
@@ -98,6 +109,7 @@ def compute_comparison(mask_set: MaskSet, reference: str) -> dict[str, Any]:
         "reference_source": reference,
         "sources": names,
         "years": {name: reference_year(name) for name in names},
+        "native_resolution_m": {name: native_resolution_m(name) for name in names},
         "grid": {
             "shape": list(mask_set.shape),
             "crs": mask_set.crs,
@@ -144,15 +156,20 @@ def compute_comparison(mask_set: MaskSet, reference: str) -> dict[str, Any]:
 
 
 def report_file_name() -> str:
-    """Nome estável do relatório JSON do diagnóstico, derivado da configuração."""
+    """Nome estável do relatório JSON do diagnóstico (multianual).
+
+    As fontes comparadas podem ter anos de referência distintos (ex.: MapBiomas
+    2025, AlphaEarth 2024, Emater 2018); o nome do relatório é, portanto,
+    independente de um ano único.
+    """
     region_code = get_config()["aoi"]["region_code"]
-    return f"mask_sources_comparison_{region_code}_{reference_year()}.json"
+    return f"mask_sources_comparison_{region_code}.json"
 
 
 def figure_file_name() -> str:
-    """Nome estável da figura do diagnóstico, derivado da configuração."""
+    """Nome estável da figura do diagnóstico (multianual)."""
     region_code = get_config()["aoi"]["region_code"]
-    return f"mask_sources_comparison_{region_code}_{reference_year()}.png"
+    return f"mask_sources_comparison_{region_code}.png"
 
 
 def save_report(result: dict[str, Any], storage_paths: dict[str, Path]) -> Path:
@@ -187,26 +204,41 @@ def save_figure(
 
 
 def render_comparison_figure(mask_set: MaskSet, reference: str) -> bytes:
-    """Renderiza a figura do diagnóstico (fontes individuais + concordância)."""
+    """Renderiza a figura do diagnóstico: todas as fontes + todos os pares.
+
+    A primeira linha exibe a máscara de cada fonte (com o ano de referência);
+    as linhas seguintes mostram o mapa de concordância de cada par de fontes,
+    permitindo comparar todas as combinações, não apenas um par.
+    """
     from src.data.raster_utils import render_figure
 
     names = list(mask_set.masks)
-    others = [name for name in names if name != reference]
-    if not others:
+    if len(names) < 2:
         raise ValueError("O diagnóstico comparativo exige pelo menos duas fontes.")
-    other = others[0]
-
-    reference_mask = display_array(mask_set.masks[reference])
-    other_mask = display_array(mask_set.masks[other])
-    agreement = display_array(agreement_labels(mask_set.masks[reference], mask_set.masks[other]))
+    pairs = list(itertools.combinations(names, 2))
+    n_cols = len(names)
+    n_rows = 1 + len(pairs)
 
     def _build(plt: Any) -> Any:
-        figure, axes = plt.subplots(1, 3, figsize=(16, 6))
-        _plot_mask(axes[0], reference_mask, reference)
-        _plot_mask(axes[1], other_mask, other)
-        _plot_agreement(axes[2], agreement, reference, other)
+        figure, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 4.4 * n_rows))
+        axes = np.atleast_2d(axes)
+        for col, name in enumerate(names):
+            _plot_mask(
+                axes[0, col],
+                display_array(mask_set.masks[name]),
+                f"{name} ({reference_year(name)})",
+            )
+        for row, (first, other) in enumerate(pairs, start=1):
+            _plot_agreement(
+                axes[row, 0],
+                display_array(agreement_labels(mask_set.masks[first], mask_set.masks[other])),
+                first,
+                other,
+            )
+            for col in range(1, n_cols):
+                axes[row, col].set_axis_off()
         figure.suptitle("Comparação das máscaras de café por fonte de ground truth", fontsize=13)
-        figure.tight_layout(rect=(0, 0, 1, 0.94))
+        figure.tight_layout(rect=(0, 0, 1, 0.95))
         return figure
 
     return render_figure(_build)

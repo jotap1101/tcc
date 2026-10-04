@@ -11,6 +11,8 @@ data:
   collection: "COPERNICUS/S2_SR_HARMONIZED"
   bands: ["B2", "B3", "B4", "B8"]
   dates:
+    # Ano/mosaico padrão do pipeline — usado como fallback apenas para fontes de
+    # ground truth sem `year` próprio (todas as habilitadas hoje declaram `year`).
     start: "2023-01-01"
     end: "2023-12-31"
   cloud_threshold: 20  # porcentagem máxima de nuvens (QA60)
@@ -23,32 +25,49 @@ data:
 
 ground_truth:
   # Cada fonte é integrada em uma célula de código própria e armazenada em uma
-  # subpasta própria sob MyDrive/tcc/data/interim/<fonte>. O ano de referência
-  # das máscaras é derivado das datas do mosaico (data.dates.start).
-  # Fonte definitiva escolhida no estágio 04 com base no diagnóstico do estágio 03
-  # (AlphaEarth: modelo dedicado a café; MapBiomas subdetecta — recall 0,416).
+  # subpasta própria sob MyDrive/tcc/data/interim/<fonte>. Cada fonte declara o
+  # `year` mais recente com dados disponíveis (definido nesta configuração):
+  # MapBiomas 2025 (Coleção 11), AlphaEarth/FDaP 2024 (modelo 2025b) e Emater
+  # 2018 (parque cafeeiro validado em campo). O ano próprio de cada fonte define
+  # o mosaico/composite/patches correspondentes.
+  # `chosen_source` é a DECISÃO MANUAL do pesquisador: o sistema não elege fonte
+  # alguma — o estágio 03 compara todas as fontes e o estágio 04 apenas registra
+  # a escolha. A fonte escolhida determina apenas qual conjunto de patches será
+  # usado no treinamento (estágios 09/10); os patches existem para todas as fontes.
   chosen_source: "alphaearth"
   sources:
     mapbiomas:
       enabled: true
-      collection_id: "projects/mapbiomas-public/assets/brazil/lulc/collection9/mapbiomas_collection90_integration_v1"
-      coffee_class: 46  # classe 3.2.2.1 Café (Coleção 9, banda classification_<ano>)
+      # Coleção consolidada do MapBiomas (cobre 1985–2025); filtra pela coleção
+      # (`collection_filter`, 11 = Coleção 11) e pelo ano. Fallback documentado:
+      # collection_filter 10 com year 2024 (Coleção 10) se a 11 ainda não estiver
+      # no asset consolidado ao executar.
+      collection_id: "projects/mapbiomas-public/assets/brazil/lulc/v1"
+      collection_filter: 11
+      year: 2025
+      coffee_class: 46  # classe 3.2.2.1 Café (banda "classification")
+      # Resolução nativa (30 m — Landsat). A exportação do GEE reamostra (near)
+      # para o grid de 10 m do Sentinel-2 (config.data.export.scale).
+      native_resolution_m: 30
     alphaearth:
       enabled: true
-      collection_id: "projects/forestdatapartnership/assets/coffee/model_2025a"
-      probability_threshold: 0.95  # limiar de probabilidade de presença de café
+      # Forest Data Partnership, modelo 2025b (embeddings AlphaEarth Foundations),
+      # cobertura pantropical 2017–2024 — ano mais recente disponível da fonte.
+      collection_id: "projects/forestdatapartnership/assets/coffee/model_2025b"
+      probability_threshold: 0.28  # limiar inicial para a 2025b; recalibrar na validação
+      year: 2024
+      native_resolution_m: 10
     emater:
       # Fonte vetorial (não-GEE): glebas de café do Geoportal do Café (Emater-MG),
       # mapeamento do parque cafeeiro concluído em 2018, validado em campo. Os
       # GeoJSONs por município ficam em data/external/emater/ (versionados e
-      # entregues ao runtime pelo bootstrap). O ano (2018) sobrescreve o padrão
-      # global para esta fonte, demandando um mosaico/composite próprio.
+      # entregues ao runtime pelo bootstrap). O ano próprio (2018) define o
+      # mosaico/composite correspondente.
       enabled: true
       kind: "vector"
       year: 2018
       data_dir: "data/external/emater"
-    s2dr:
-      enabled: false
+      native_resolution_m: 10  # rasterizada diretamente no grid de 10 m do AOI
 
 gee:
   project: "articulate-case-508513-m4"  # ID do projeto Cloud do Earth Engine
@@ -60,11 +79,8 @@ storage:
     data_raw_sentinel2: "data/raw/sentinel2"
     data_interim: "data/interim"
     data_processed: "data/processed"
-    data_processed_ground_truth: "data/processed/ground_truth"
     data_processed_composites: "data/processed/composites"
     data_processed_patches: "data/processed/patches"
-    data_processed_patches_images: "data/processed/patches/images"
-    data_processed_patches_masks: "data/processed/patches/masks"
     data_external: "data/external"
     models: "models"
     artifacts_metrics: "artifacts/metrics"

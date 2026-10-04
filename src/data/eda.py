@@ -1,12 +1,13 @@
-"""Análise exploratória dos patches e estatísticas de normalização (estágio 08).
+"""Análise exploratória dos patches e estatísticas de normalização por fonte (estágio 08).
 
-Calcula as estatísticas de normalização por banda (média, desvio padrão e fração
-de NaN) sobre todos os pixels finitos dos patches registrados no manifesto do
-estágio 06/07, persistindo-as em data/processed/normalization_stats.json com
-fingerprint de versão — idempotente, pois reexecuções reutilizam o arquivo
-vigente sem reprocessar. Executa também verificações de sanidade do dataset
-(formas, tipos, máscaras binárias, distribuição de café, dobras e amostra de
-arquivos) e gera a figura de resumo em artifacts/figures/.
+Calcula, para cada fonte habilitada, as estatísticas de normalização por banda
+(média, desvio padrão e fração de NaN) sobre todos os pixels finitos dos patches
+registrados no manifesto da fonte (estágio 06/07), persistindo-as em
+data/processed/normalization_stats_<fonte>.json com fingerprint de versão —
+idempotente, pois reexecuções reutilizam o arquivo vigente sem reprocessar.
+Executa também verificações de sanidade do dataset de cada fonte (formas, tipos,
+máscaras binárias, distribuição de café, dobras e amostra de arquivos) e gera a
+figura de resumo por fonte em artifacts/figures/.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 from src.config import get_config
-from src.data.mask_utils import active_year
+from src.data.mask_utils import reference_year
 from src.data.patch_generation import (
     load_manifest,
     patch_fingerprint_hash,
@@ -32,24 +33,28 @@ SANITY_SAMPLE_SIZE = 10  # tamanho da amostra determinística das verificações
 HIST_BINS = 32  # número de bins do histograma de reflectância da figura
 
 
-def normalization_stats_path(storage_paths: dict[str, Path]) -> Path:
-    """Caminho canônico das estatísticas de normalização (data/processed/)."""
-    return storage_paths["data_processed"] / "normalization_stats.json"
+def normalization_stats_path(storage_paths: dict[str, Path], source_name: str) -> Path:
+    """Caminho canônico das estatísticas de normalização da fonte (data/processed/)."""
+    return storage_paths["data_processed"] / f"normalization_stats_{source_name}.json"
 
 
-def eda_figure_file_name() -> str:
-    """Nome estável da figura de resumo da EDA, derivado da configuração."""
+def eda_figure_file_name(source_name: str) -> str:
+    """Nome estável da figura de resumo da EDA da fonte, derivado da configuração."""
     config = get_config()
-    return f"eda_summary_{config['aoi']['region_code']}_{active_year()}.png"
+    return (
+        f"eda_summary_{config['aoi']['region_code']}_{reference_year(source_name)}"
+        f"_{source_name}.png"
+    )
 
 
-def _stats_fingerprint(storage_paths: dict[str, Path]) -> dict[str, Any]:
-    """Fingerprint das estatísticas (schema, bandas e hash dos patches)."""
+def _stats_fingerprint(storage_paths: dict[str, Path], source_name: str) -> dict[str, Any]:
+    """Fingerprint das estatísticas da fonte (schema, bandas e hash dos patches)."""
     config = get_config()
     return {
         "schema_version": EDA_SCHEMA_VERSION,
+        "source_name": source_name,
         "bands": list(config["data"]["bands"]),
-        "fingerprint_hash": patch_fingerprint_hash(storage_paths),
+        "fingerprint_hash": patch_fingerprint_hash(storage_paths, source_name),
     }
 
 
@@ -63,11 +68,11 @@ def _finite_or_none(value: float) -> float | None:
     return float(value) if np.isfinite(value) else None
 
 
-def normalization_stats_is_current(storage_paths: dict[str, Path]) -> bool:
-    """Indica se as estatísticas persistidas estão vigentes frente aos patches."""
+def normalization_stats_is_current(storage_paths: dict[str, Path], source_name: str) -> bool:
+    """Indica se as estatísticas persistidas da fonte estão vigentes frente aos patches."""
     from src import io
 
-    stats_path = normalization_stats_path(storage_paths)
+    stats_path = normalization_stats_path(storage_paths, source_name)
     if not io.path_exists(stats_path):
         return False
     local_stats = io.ensure_local_copy(stats_path)
@@ -75,29 +80,30 @@ def normalization_stats_is_current(storage_paths: dict[str, Path]) -> bool:
         stored = json.loads(local_stats.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return False
-    return stored.get("fingerprint") == _stats_fingerprint(storage_paths)
+    return stored.get("fingerprint") == _stats_fingerprint(storage_paths, source_name)
 
 
 def compute_normalization_stats(
     storage_paths: dict[str, Path],
+    source_name: str,
 ) -> dict[str, Any]:
-    """Garante as estatísticas de normalização por banda (idempotente).
+    """Garante as estatísticas de normalização por banda da fonte (idempotente).
 
     Reutiliza o arquivo persistido quando o fingerprint vigente coincide com o
-    armazenado; caso contrário, percorre todos os patches do manifesto e acumula
-    soma, soma dos quadrados, contagem de pixels finitos e de NaN por banda,
-    derivando média, desvio padrão e fração de NaN.
+    armazenado; caso contrário, percorre todos os patches do manifesto da fonte e
+    acumula soma, soma dos quadrados, contagem de pixels finitos e de NaN por
+    banda, derivando média, desvio padrão e fração de NaN.
     """
     from src import io
 
-    stats_path = normalization_stats_path(storage_paths)
-    if normalization_stats_is_current(storage_paths):
-        print(f"Estatísticas já existentes e atuais (reutilizadas): {stats_path}")
+    stats_path = normalization_stats_path(storage_paths, source_name)
+    if normalization_stats_is_current(storage_paths, source_name):
+        print(f"Estatísticas {source_name} já existentes e atuais (reutilizadas): {stats_path}")
         local_stats = io.ensure_local_copy(stats_path)
         return json.loads(local_stats.read_text(encoding="utf-8"))
 
-    require_manifest(storage_paths)
-    manifest = load_manifest(storage_paths)
+    require_manifest(storage_paths, source_name)
+    manifest = load_manifest(storage_paths, source_name)
     config = get_config()
     bands = list(config["data"]["bands"])
     n_bands = len(bands)
@@ -135,7 +141,8 @@ def compute_normalization_stats(
 
     payload = {
         "schema_version": EDA_SCHEMA_VERSION,
-        "fingerprint": _stats_fingerprint(storage_paths),
+        "source_name": source_name,
+        "fingerprint": _stats_fingerprint(storage_paths, source_name),
         "bands": bands,
         "n_patches": int(len(manifest)),
         "per_band": per_band,
@@ -150,8 +157,9 @@ def compute_normalization_stats(
 
 def run_sanity_checks(
     storage_paths: dict[str, Path],
+    source_name: str,
 ) -> dict[str, Any]:
-    """Executa verificações de sanidade do dataset a partir do manifesto.
+    """Executa verificações de sanidade do dataset da fonte a partir do manifesto.
 
     Valida o manifesto (contagens, café, dobras, unicidade) e uma amostra
     determinística de patches (forma esperada, dtype, máscara binária, intervalo
@@ -159,8 +167,8 @@ def run_sanity_checks(
     """
     from src import io
 
-    require_manifest(storage_paths)
-    manifest = load_manifest(storage_paths)
+    require_manifest(storage_paths, source_name)
+    manifest = load_manifest(storage_paths, source_name)
     config = get_config()
     bands = list(config["data"]["bands"])
     patch_size = int(config["data"]["patch_size"])
@@ -238,17 +246,17 @@ def run_sanity_checks(
     }
 
 
-def save_eda_figure(storage_paths: dict[str, Path]) -> Path:
-    """Persiste a figura de resumo da EDA no Drive canônico (idempotente)."""
+def save_eda_figure(storage_paths: dict[str, Path], source_name: str) -> Path:
+    """Persiste a figura de resumo da EDA da fonte no Drive canônico (idempotente)."""
     from src import io
 
-    figure_path = storage_paths["artifacts_figures"] / eda_figure_file_name()
+    figure_path = storage_paths["artifacts_figures"] / eda_figure_file_name(source_name)
     if io.path_exists(figure_path):
         print(f"Figura já existente (reutilizada): {figure_path}")
         return figure_path
 
-    manifest = load_manifest(storage_paths)
-    stats = compute_normalization_stats(storage_paths)
+    manifest = load_manifest(storage_paths, source_name)
+    stats = compute_normalization_stats(storage_paths, source_name)
     io.persist_bytes(figure_path, render_eda_figure(manifest, stats, storage_paths))
     print(f"Figura salva em: {figure_path}")
     return figure_path
