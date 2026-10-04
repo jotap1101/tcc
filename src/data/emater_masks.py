@@ -226,8 +226,7 @@ def render_emater_mask_preview(mask_path: Path) -> bytes:
             vmin=0,
             vmax=1,
         )
-        axis.set_xticks([])
-        axis.set_yticks([])
+        axis.axis("off")
         figure.tight_layout()
         return figure
 
