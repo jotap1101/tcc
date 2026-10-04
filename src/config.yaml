@@ -34,7 +34,7 @@ ground_truth:
   # alguma — o estágio 03 compara todas as fontes e o estágio 04 apenas registra
   # a escolha. A fonte escolhida determina apenas qual conjunto de patches será
   # usado no treinamento (estágios 09/10); os patches existem para todas as fontes.
-  chosen_source: "alphaearth"
+  chosen_source: "emater"
   sources:
     mapbiomas:
       enabled: true
